@@ -1,0 +1,40 @@
+{
+  "version": "{{VERSION}}",
+  "feature_id": "{{FEATURE_ID}}",
+  "feature_title": "{{FEATURE_TITLE}}",
+  "objective": "Implement {{FEATURE_ID}} exactly as specified by the documents listed in reads.",
+  "reads": {
+    "domain": [],
+    "prd": [
+      "docs/OpenChoreo-Specs/PRDs/prd.md",
+      "docs/OpenChoreo-Specs/PRDs/prd_{{VERSION}}_{{FEATURE_ID}}-*.md"
+    ],
+    "adrs": [],
+    "architecture": [
+      "docs/OpenChoreo-Specs/architect/architect_common.md",
+      "docs/OpenChoreo-Specs/architect/feature_{{VERSION}}_{{FEATURE_ID}}_architect.md"
+    ],
+    "tasks": [
+      "docs/OpenChoreo-Specs/tasks/tasks_{{VERSION}}_{{FEATURE_ID}}.md"
+    ],
+    "tests": [
+      "docs/OpenChoreo-Specs/tests/testing_strategy.md"
+    ],
+    "runbooks": []
+  },
+  "writes": {
+    "code": [],
+    "tests": []
+  },
+  "guardrails": [
+    "Do not invent requirements: if a document is silent, stop and ask.",
+    "Do not change any file under docs/ while executing this route.",
+    "Follow architect_common.md for naming, quality and security; it overrides personal preference.",
+    "One task from tasks_{{VERSION}}_{{FEATURE_ID}}.md at a time, in the stated order."
+  ],
+  "exit_criteria": [
+    "Every acceptance criterion in the feature PRD has a passing test.",
+    "Review checklist in architect_common.md passes.",
+    "tasks_{{VERSION}}_{{FEATURE_ID}}.md status column is complete."
+  ]
+}

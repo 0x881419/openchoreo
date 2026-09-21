@@ -16,8 +16,11 @@
     ],
     "architecture": [
       "docs/OpenChoreo-Specs/architect/architect_common.md",
-      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-010_architect.md"
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-010_architect_diagram/feature_v1.2.0_F-010_front-matter.yaml",
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-010_architect.md",
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-010_architect_diagram/feature_v1.2.0_F-010_sequence.puml"
     ],
+    "data": [],
     "tasks": [
       "docs/OpenChoreo-Specs/tasks/tasks_v1.2.0_F-010.md"
     ],

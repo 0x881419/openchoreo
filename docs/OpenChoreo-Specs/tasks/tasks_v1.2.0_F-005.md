@@ -3,7 +3,7 @@ title: Tasks v1.2.0 F-005 — Multi-Plane Topology and Connectivity
 id: F-005
 status: draft
 owner: TBD
-updated: 2026-09-19
+updated: 2026-09-21
 ---
 
 # Tasks v1.2.0 F-005 — Multi-Plane Topology and Connectivity

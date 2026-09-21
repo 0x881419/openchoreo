@@ -5,6 +5,7 @@
   "objective": "Implement F-008 exactly as specified by the documents listed in reads.",
   "reads": {
     "domain": [
+      "docs/OpenChoreo-Specs/ddd/domain_DOM-001-component-delivery-pipeline.md",
       "docs/OpenChoreo-Specs/ddd/domain_DOM-002-authorization.md"
     ],
     "prd": [
@@ -16,8 +17,11 @@
     ],
     "architecture": [
       "docs/OpenChoreo-Specs/architect/architect_common.md",
-      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-008_architect.md"
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-008_architect_diagram/feature_v1.2.0_F-008_front-matter.yaml",
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-008_architect.md",
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-008_architect_diagram/feature_v1.2.0_F-008_sequence.puml"
     ],
+    "data": [],
     "tasks": [
       "docs/OpenChoreo-Specs/tasks/tasks_v1.2.0_F-008.md"
     ],

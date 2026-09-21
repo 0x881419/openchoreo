@@ -1,0 +1,152 @@
+# feature_v1.2.0_F-006_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-006"
+feature: "F-006"
+version: "v1.2.0"
+kind: front-matter
+title: "Build and Workflow Execution"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Turns a git push into a running workload: a provider webhook triggers a WorkflowRun, which renders an Argo workflow that builds with Buildpacks and pushes an image."
+globs:
+  - "api/v1alpha1/workflow_types.go"
+  - "api/v1alpha1/clusterworkflow_types.go"
+  - "api/v1alpha1/workflowrun_types.go"
+  - "api/v1alpha1/workflowplane_types.go"
+  - "internal/controller/workflow/**"
+  - "internal/controller/clusterworkflow/**"
+  - "internal/controller/workflowrun/**"
+  - "internal/controller/workflowplane/**"
+  - "internal/pipeline/workflow/**"
+  - "internal/openchoreo-api/services/autobuild/**"
+
+participants:
+  - name: "Git provider"
+    role: actor
+    path: "external"
+  - name: "Developer"
+    role: actor
+    path: "external"
+  - name: "openchoreo-api"
+    role: entrypoint
+    path: "cmd/openchoreo-api/main.go"
+  - name: "autobuild webhook processor"
+    role: service
+    path: "internal/openchoreo-api/services/autobuild/webhook_processor.go"
+  - name: "workflowrun service"
+    role: service
+    path: "internal/openchoreo-api/services/workflowrun"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+  - name: "workflowrun controller"
+    role: service
+    path: "internal/controller/workflowrun/controller.go"
+  - name: "workflow render pipeline"
+    role: service
+    path: "internal/pipeline/workflow"
+  - name: "workflow plane (Argo)"
+    role: external
+    path: "external"
+  - name: "registry"
+    role: external
+    path: "external"
+
+entrypoints:
+  - kind: HTTP
+    path: "internal/openchoreo-api/services/autobuild/webhook_processor.go"
+    symbol: "ProcessWebhook"
+  - kind: EVENT
+    path: "internal/controller/workflowrun/controller.go"
+    symbol: "Reconcile"
+
+contracts:
+  endpoints:
+    - "DELETE /api/v1/clusterworkflows/{clusterWorkflowName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/workflowruns/{runName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/workflows/{workflowName}"
+    - "GET /api/v1/clusterworkflows"
+    - "GET /api/v1/clusterworkflows/{clusterWorkflowName}"
+    - "GET /api/v1/clusterworkflows/{clusterWorkflowName}/schema"
+    - "GET /api/v1/namespaces/{namespaceName}/workflowruns"
+    - "GET /api/v1/namespaces/{namespaceName}/workflowruns/{runName}"
+    - "GET /api/v1/namespaces/{namespaceName}/workflowruns/{runName}/events"
+    - "GET /api/v1/namespaces/{namespaceName}/workflowruns/{runName}/logs"
+    - "GET /api/v1/namespaces/{namespaceName}/workflowruns/{runName}/status"
+    - "GET /api/v1/namespaces/{namespaceName}/workflows"
+    - "GET /api/v1/namespaces/{namespaceName}/workflows/{workflowName}"
+    - "GET /api/v1/namespaces/{namespaceName}/workflows/{workflowName}/schema"
+    - "POST /api/v1/clusterworkflows"
+    - "POST /api/v1/namespaces/{namespaceName}/workflowruns"
+    - "POST /api/v1/namespaces/{namespaceName}/workflows"
+    - "POST /api/v1alpha1/autobuild"
+    - "PUT /api/v1/clusterworkflows/{clusterWorkflowName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/workflowruns/{runName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/workflows/{workflowName}"
+  events: []  # no message broker or topic is used by this feature
+  entities:
+    - "Workflow"
+    - "ClusterWorkflow"
+    - "WorkflowRun"
+    - "WorkflowPlane"
+
+depends_on:
+  internal:
+    - "internal/pipeline/workflow"
+    - "internal/clients/gateway"
+  external:
+    - "Argo Workflows"
+    - "cloud native Buildpacks"
+    - "an OCI registry"
+
+approach:
+  chosen: "Builds are modelled as ordinary platform abstractions: a Workflow is a parameterised template like a ComponentType, and a WorkflowRun is its execution with status, logs and events as sub-resources."
+  because: "efficiency: CEL environments are cached across runs. robustness: a build template is schema-validated like any other abstraction. resilience: a failed build records its phase and retains logs; no release is cut from it."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-001-R5]
+
+failure_modes:
+  - when: "the Argo workflow reports phase Failed"
+    expect: "set the WorkflowRun status to Failed and retain the logs; cut no release"
+  - when: "no WorkflowPlane is registered for the namespace"
+    expect: "record the condition; the run does not start"
+  - when: "a reconcile returns a non-nil error"
+    expect: "requeue with backoff and record the condition on the resource status"
+  - when: "a resource is deleted while dependents exist"
+    expect: "run the finalizer cleanup before releasing the object"
+
+resilience:
+  timeout_ms: "none"
+  retry: "controller-runtime exponential backoff on requeue"
+  idempotency: "a run is keyed by the commit that triggered it"
+  degraded: "Already-built images keep deploying; only new builds are blocked when the workflow plane is absent."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Deploying the image it builds — that is F-001."
+  - "Hosting the registry it pushes to."
+
+traceability:
+  stories: [F-006-US1, F-006-US2, F-006-US3]
+  rules: [DOM-001-R5]
+  tasks: [F-006-T1, F-006-T2, F-006-T3, F-006-T4, F-006-T5, F-006-T6]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-006.md"
+
+open:
+  - "No build timeout, retry count or concurrency limit is configured."
+  - "No retention policy for WorkflowRun objects or their logs is expressed."
+  - "What is lost when the optional CI plane is absent is unstated."
+  - "The supported path for replacing Argo or Buildpacks is unstated."

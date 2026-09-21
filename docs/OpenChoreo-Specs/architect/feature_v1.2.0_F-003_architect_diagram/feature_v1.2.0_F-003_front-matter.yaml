@@ -1,0 +1,162 @@
+# feature_v1.2.0_F-003_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-003"
+feature: "F-003"
+version: "v1.2.0"
+kind: front-matter
+title: "Project and Resource Delivery"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Applies the same definition-release-binding-rendered shape to Projects and to backing Resources, giving projects isolation and networking and surfacing resolved resource outputs to workloads."
+globs:
+  - "api/v1alpha1/project_types.go"
+  - "api/v1alpha1/projectrelease_types.go"
+  - "api/v1alpha1/projectreleasebinding_types.go"
+  - "api/v1alpha1/resource_types.go"
+  - "api/v1alpha1/resourcerelease_types.go"
+  - "api/v1alpha1/resourcereleasebinding_types.go"
+  - "internal/controller/project/**"
+  - "internal/controller/projectrelease/**"
+  - "internal/controller/projectreleasebinding/**"
+  - "internal/controller/resource/**"
+  - "internal/controller/resourcerelease/**"
+  - "internal/controller/resourcereleasebinding/**"
+  - "internal/pipeline/project/**"
+  - "internal/pipeline/resource/**"
+
+participants:
+  - name: "Developer"
+    role: actor
+    path: "external"
+  - name: "openchoreo-api"
+    role: entrypoint
+    path: "cmd/openchoreo-api/main.go"
+  - name: "project service"
+    role: service
+    path: "internal/openchoreo-api/services/project"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+  - name: "project controller"
+    role: service
+    path: "internal/controller/project"
+  - name: "projectreleasebinding controller"
+    role: service
+    path: "internal/controller/projectreleasebinding/controller.go"
+  - name: "resourcereleasebinding controller"
+    role: service
+    path: "internal/controller/resourcereleasebinding/controller.go"
+  - name: "renderedrelease controller"
+    role: service
+    path: "internal/controller/renderedrelease/controller.go"
+  - name: "data plane cluster"
+    role: external
+    path: "external"
+
+entrypoints:
+  - kind: HTTP
+    path: "cmd/openchoreo-api/main.go"
+    symbol: "main"
+  - kind: EVENT
+    path: "internal/controller/projectreleasebinding/controller.go"
+    symbol: "Reconcile"
+  - kind: EVENT
+    path: "internal/controller/resourcereleasebinding/controller.go"
+    symbol: "Reconcile"
+
+contracts:
+  endpoints:
+    - "DELETE /api/v1/namespaces/{namespaceName}/projectreleasebindings/{projectReleaseBindingName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/projectreleases/{projectReleaseName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/projects/{projectName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/resourcereleasebindings/{resourceReleaseBindingName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/resourcereleases/{resourceReleaseName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/resources/{resourceName}"
+    - "GET /api/v1/namespaces/{namespaceName}/projectreleasebindings"
+    - "GET /api/v1/namespaces/{namespaceName}/projectreleasebindings/{projectReleaseBindingName}"
+    - "GET /api/v1/namespaces/{namespaceName}/projectreleases"
+    - "GET /api/v1/namespaces/{namespaceName}/projectreleases/{projectReleaseName}"
+    - "GET /api/v1/namespaces/{namespaceName}/projects"
+    - "GET /api/v1/namespaces/{namespaceName}/projects/{projectName}"
+    - "GET /api/v1/namespaces/{namespaceName}/resourcereleasebindings"
+    - "GET /api/v1/namespaces/{namespaceName}/resourcereleasebindings/{resourceReleaseBindingName}"
+    - "GET /api/v1/namespaces/{namespaceName}/resourcereleases"
+    - "GET /api/v1/namespaces/{namespaceName}/resourcereleases/{resourceReleaseName}"
+    - "GET /api/v1/namespaces/{namespaceName}/resources"
+    - "GET /api/v1/namespaces/{namespaceName}/resources/{resourceName}"
+    - "POST /api/v1/namespaces/{namespaceName}/projectreleasebindings"
+    - "POST /api/v1/namespaces/{namespaceName}/projectreleases"
+    - "POST /api/v1/namespaces/{namespaceName}/projects"
+    - "POST /api/v1/namespaces/{namespaceName}/resourcereleasebindings"
+    - "POST /api/v1/namespaces/{namespaceName}/resourcereleases"
+    - "POST /api/v1/namespaces/{namespaceName}/resources"
+    - "PUT /api/v1/namespaces/{namespaceName}/projectreleasebindings/{projectReleaseBindingName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/projects/{projectName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/resourcereleasebindings/{resourceReleaseBindingName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/resources/{resourceName}"
+  events: []  # no message broker or topic is used by this feature
+  entities:
+    - "Project"
+    - "ProjectRelease"
+    - "ProjectReleaseBinding"
+    - "Resource"
+    - "ResourceRelease"
+    - "ResourceReleaseBinding"
+
+depends_on:
+  internal:
+    - "internal/pipeline/project"
+    - "internal/pipeline/resource"
+    - "internal/networkpolicy"
+  external:
+    - "Kubernetes API server >= 1.30"
+    - "Cilium/Hubble for flow visibility"
+
+approach:
+  chosen: "Reuse the component pipeline's four-stage shape for projects and resources so all three converge on one RenderedRelease kind."
+  because: "efficiency: one apply path and one controller to maintain. robustness: a reader who understands one family understands all three. resilience: an unresolved dependency leaves the binding pending rather than rendering a half-resolved workload."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-001-R1, DOM-001-R5]
+
+failure_modes:
+  - when: "a declared resource dependency is missing or not ready"
+    expect: "record a pending resource dependency on the binding and do not render"
+  - when: "a reconcile returns a non-nil error"
+    expect: "requeue with backoff and record the condition on the resource status"
+  - when: "a resource is deleted while dependents exist"
+    expect: "run the finalizer cleanup before releasing the object"
+
+resilience:
+  timeout_ms: "none"
+  retry: "controller-runtime exponential backoff on requeue"
+  idempotency: "server-side apply with FieldOwner and ForceOwnership"
+  degraded: "Components already bound keep running; new bindings wait on their dependencies."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Rendering components — that is F-001."
+  - "Provisioning the external systems a ResourceType points at."
+
+traceability:
+  stories: [F-003-US1, F-003-US2, F-003-US3]
+  rules: [DOM-001-R1, DOM-001-R5]
+  tasks: [F-003-T1, F-003-T2, F-003-T3, F-003-T4, F-003-T5, F-003-T6]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-003.md"
+
+open:
+  - "Whether the three-way symmetry with F-001 is intentional design or convergent evolution is unrecorded."
+  - "Which output form is expected for a credential — literal, secretKeyRef or configMapKeyRef — is unstated."
+  - "The intended lifecycle when a Resource is deleted while components still depend on it is unstated."

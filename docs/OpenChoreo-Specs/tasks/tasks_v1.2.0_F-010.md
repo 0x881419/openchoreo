@@ -3,7 +3,7 @@ title: Tasks v1.2.0 F-010 — AI Agents
 id: F-010
 status: draft
 owner: TBD
-updated: 2026-09-19
+updated: 2026-09-21
 ---
 
 # Tasks v1.2.0 F-010 — AI Agents

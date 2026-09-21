@@ -1,0 +1,134 @@
+# feature_v1.2.0_F-010_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-010"
+feature: "F-010"
+version: "v1.2.0"
+kind: front-matter
+title: "AI Agents"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Three standalone Python services that consume the platform's own APIs to answer questions, analyse incidents and report cost, each with guard rules about what it will not do with model output."
+globs:
+  - "agents/common/**"
+  - "agents/portal-assistant/**"
+  - "agents/sre-agent/**"
+  - "agents/finops-agent/**"
+
+participants:
+  - name: "Platform user"
+    role: actor
+    path: "external"
+  - name: "SRE"
+    role: actor
+    path: "external"
+  - name: "portal assistant"
+    role: entrypoint
+    path: "agents/portal-assistant/src/main.py"
+  - name: "sre agent"
+    role: entrypoint
+    path: "agents/sre-agent/src/main.py"
+  - name: "finops agent"
+    role: entrypoint
+    path: "agents/finops-agent/src/main.py"
+  - name: "agent MCP server"
+    role: service
+    path: "agents/sre-agent/src/mcp_server.py"
+  - name: "openchoreo MCP / observer"
+    role: external
+    path: "external"
+  - name: "LLM provider"
+    role: external
+    path: "external"
+  - name: "report store"
+    role: store
+    path: "external"
+
+entrypoints:
+  - kind: HTTP
+    path: "agents/portal-assistant/src/api/agent_routes.py"
+    symbol: "chat"
+  - kind: HTTP
+    path: "agents/sre-agent/src/api/agent_routes.py"
+    symbol: "analyze"
+  - kind: HTTP
+    path: "agents/finops-agent/src/api/agent_routes.py"
+    symbol: "analyses"
+
+contracts:
+  endpoints:
+    - "GET /api/v1/rca-agent/reports"
+    - "GET /api/v1/rca-agent/reports/{report_id}"
+    - "GET /api/v1alpha1/reports"
+    - "GET /api/v1alpha1/reports/missing"
+    - "GET /api/v1alpha1/reports/r1"
+    - "GET /api/v1alpha1/reports/{report_id}"
+    - "POST /api/v1alpha1/analyses"
+    - "POST /api/v1alpha1/portal-assistant/chat"
+    - "POST /api/v1alpha1/portal-assistant/warmup"
+    - "POST /api/v1alpha1/rca-agent/analyze"
+    - "POST /api/v1alpha1/rca-agent/chat"
+    - "PUT /api/v1/rca-agent/reports/{report_id}"
+    - "PUT /api/v1alpha1/reports/r1"
+    - "PUT /api/v1alpha1/reports/{report_id}"
+  events: []  # no message broker or topic is used by this feature
+  entities: []
+
+depends_on:
+  internal:
+    - "agents/common"
+  external:
+    - "an LLM provider"
+    - "the OpenChoreo MCP endpoint"
+    - "the observer API"
+
+approach:
+  chosen: "The agents are independent services that consume the platform's public APIs rather than privileged components inside the control plane."
+  because: "efficiency: each agent ships and scales on its own cadence. robustness: they hold no platform privileges beyond the token they present. resilience: each carries explicit guard rules — never echo raw exception text, never retry an empty observability query, surface a forbidden response distinctly."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants:
+  none: "This feature's constraints are stated in code and quoted in its sequence diagram, but none has been promoted to a DOM-nnn-Rk rule in a domain document. Promoting them is a follow-up for product-docs-flow."
+
+failure_modes:
+  - when: "an unhandled error occurs inside an agent"
+    expect: "return a generic message and never echo the raw exception text"
+  - when: "an observability query returns empty"
+    expect: "summarise what is missing and stop rather than retrying with a new window"
+  - when: "the platform returns forbidden"
+    expect: "surface it as FORBIDDEN, distinct from a backend failure, and degrade rather than retry"
+  - when: "a dismiss request targets an already-applied action"
+    expect: "reject it; a dismiss must not flip an applied action"
+
+resilience:
+  timeout_ms: "none"
+  retry: "none"
+  idempotency: "a report is identified by its report id"
+  degraded: "The platform is unaffected; an agent outage removes only the assistant surface."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Acting on the platform without a user's token."
+  - "Storing platform state — reports live in each agent's own store."
+
+traceability:
+  stories: [F-010-US1, F-010-US2, F-010-US3]
+  rules: []  # see invariants.none
+  tasks: [F-010-T1, F-010-T2, F-010-T3]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-010.md"
+
+open:
+  - "Which LLM providers are supported, and whether the model is a deployment choice, is unstated."
+  - "What data leaves the cluster on a model call, and whether it is redacted, is unstated."
+  - "The support level of these agents is unstated while their versions read 0.1.0."

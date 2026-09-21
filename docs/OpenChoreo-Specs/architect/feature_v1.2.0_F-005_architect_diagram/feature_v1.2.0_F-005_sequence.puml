@@ -1,0 +1,109 @@
+@startuml feature_v1.2.0_F-005_sequence
+' Runtime truth for F-005 v1.2.0 — Multi-Plane Topology and Connectivity
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-005_front-matter.yaml, name for name.
+title F-005 v1.2.0 — Multi-Plane Topology and Connectivity
+autonumber
+
+actor "Platform engineer" as PE
+actor "Developer" as Dev
+participant "openchoreo-api" as API
+participant "cluster gateway" as GW
+participant "gateway fabric" as Fab
+participant "cluster agent" as Agent
+database "Kubernetes API (etcd)" as K8s
+participant "remote agent" as RA
+participant "data plane cluster" as DP
+
+group F-005-US1 — register a data plane and reach it without inbound firewall rules
+  PE -> API : POST /api/v1/namespaces/{namespaceName}/dataplanes
+  API -> K8s : create DataPlane
+  Agent -> GW : dial out, present client certificate
+  activate GW
+  GW -> GW : parse identity from the certificate subject
+  GW -> Fab : register the connection with this pod as owner
+  Fab -> Fab : replicate the registry entry to peers
+  deactivate GW
+  API -> GW : request for a managed cluster
+  GW -> Fab : Lookup owner (local memory only)
+  alt this pod owns the connection
+    GW -> Agent : forward over the existing connection
+    Agent -> DP : perform the operation
+    DP --> Agent : result
+    Agent --> GW : result
+  else another pod owns it
+    GW -> Fab : forward to the owning peer
+    Fab --> GW : result
+  end
+  GW --> API : result
+end
+
+group F-005-US2 — define promotion order between environments once
+  PE -> API : POST /api/v1/namespaces/{namespaceName}/deploymentpipelines
+  API -> K8s : create DeploymentPipeline
+  note right of K8s : promotion paths constrain which environments a release may bind to next
+end
+
+group F-005-US3 — reach a dependency in a data plane from a laptop
+  Dev -> API : POST /api/v1/remote-connect:resolve
+  activate API
+  API -> API : resolve targets, provision a remote agent for this project and environment
+  API --> Dev : targets, signed capability, agent L4 endpoint
+  deactivate API
+  Dev -> RA : TLS dial, Hello with the capability
+  activate RA
+  Dev -> RA : one yamux stream per local connection
+  RA -> API : POST /api/v1/remote-connect:authorize (capability, target key)
+  API --> RA : concrete host and port
+  RA -> DP : dial and pipe
+  deactivate RA
+  note right of RA : the byte path does not traverse the control plane
+  RA -> API : POST /api/v1/remote-connect:heartbeat
+end
+
+group failure — the owning peer's link is gone
+  GW -> Fab : forward to the owner
+  Fab --> GW : retryable sentinel, the request provably never left this pod
+  GW -> Fab : try the next candidate owner
+end
+
+group failure — the request was already on the wire
+  Fab --> GW : outcome unknown, distinct from never-dispatched
+  GW --> API : not reported as safe to retry
+end
+
+group failure — a peer cannot be dialled
+  Fab -> Fab : widening backoff, never a tight loop
+end
+
+group failure — a registry sequence gap
+  Fab -> Fab : request a full snapshot from the owner
+  Fab -> Fab : the gapped delta is not applied
+end
+
+group failure — reconcile error
+  API -> K8s : update DataPlane status condition
+  note right of K8s : requeue with backoff; the agent connection is unaffected
+end
+
+group failure — deletion while dependents exist
+  PE -> API : DELETE the plane
+  API -> K8s : delete
+  K8s -> K8s : finalizer cleanup runs before the object is released
+  GW -> Fab : unregister the connections it owned
+end
+
+note over GW, Fab
+  invariants: DOM-003-R1 Lookup never blocks on the network
+  DOM-003-R3 widening backoff on a failed dial
+  DOM-003-R5 no link means fail fast with a retryable sentinel
+  DOM-003-R6 never-dispatched and outcome-unknown stay distinguishable
+  DOM-003-R7 a sequence gap is repaired by full snapshot
+  DOM-003-R8 a draining pod still counts but receives no new forwards
+  DOM-003-R10 rebalancing tolerates slack above fair share
+  log read is capped at 10 MB per container
+  OPEN: no connection ceiling per gateway replica is stated
+  OPEN: the capability's lifetime and revocation path are unstated
+end note
+@enduml

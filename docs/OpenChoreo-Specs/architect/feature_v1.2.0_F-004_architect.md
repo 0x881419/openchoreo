@@ -73,7 +73,6 @@ OPEN: the happy-path call order above is read off reconciler registration and ow
 ## Failure modes
 | Failure | Detection | Behaviour in code | Evidence |
 | --- | --- | --- | --- |
-| Reconcile error | controller-runtime returns a non-nil error | requeue with backoff; condition recorded on the resource status | [D: internal/controller/conditions.go:1] |
 | Resource deleted while dependents exist | finalizer on the parent | cleanup runs before the object is released | [D: internal/controller/component/controller.go:1] |
 
 OPEN: which of these failures page someone, and which are expected steady-state noise? No alerting rule in the repository distinguishes them.

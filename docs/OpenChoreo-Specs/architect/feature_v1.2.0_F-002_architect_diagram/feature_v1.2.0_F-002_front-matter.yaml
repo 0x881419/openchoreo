@@ -1,0 +1,178 @@
+# feature_v1.2.0_F-002_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-002"
+feature: "F-002"
+version: "v1.2.0"
+kind: front-matter
+title: "Platform Abstractions and Templating"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Lets platform engineers define the component types, traits and parameter schemas that developers instantiate, evaluated at render time by a CEL engine under a cost budget."
+globs:
+  - "api/v1alpha1/componenttype_types.go"
+  - "api/v1alpha1/clustercomponenttype_types.go"
+  - "api/v1alpha1/trait_types.go"
+  - "api/v1alpha1/clustertrait_types.go"
+  - "api/v1alpha1/resourcetype_types.go"
+  - "api/v1alpha1/projecttype_types.go"
+  - "internal/controller/componenttype/**"
+  - "internal/controller/clustercomponenttype/**"
+  - "internal/controller/trait/**"
+  - "internal/controller/clustertrait/**"
+  - "internal/template/**"
+  - "internal/schema/**"
+
+participants:
+  - name: "Platform engineer"
+    role: actor
+    path: "external"
+  - name: "Developer"
+    role: actor
+    path: "external"
+  - name: "openchoreo-api"
+    role: entrypoint
+    path: "cmd/openchoreo-api/main.go"
+  - name: "componenttype service"
+    role: service
+    path: "internal/openchoreo-api/services/componenttype"
+  - name: "schema extractor"
+    role: service
+    path: "internal/schema/openapiv3.go"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+  - name: "componenttype controller"
+    role: service
+    path: "internal/controller/componenttype"
+  - name: "CEL template engine"
+    role: service
+    path: "internal/template/engine.go"
+
+entrypoints:
+  - kind: HTTP
+    path: "cmd/openchoreo-api/main.go"
+    symbol: "main"
+  - kind: EVENT
+    path: "internal/controller/componenttype"
+    symbol: "Reconcile"
+
+contracts:
+  endpoints:
+    - "DELETE /api/v1/clustercomponenttypes/{cctName}"
+    - "DELETE /api/v1/clusterprojecttypes/{cptName}"
+    - "DELETE /api/v1/clusterresourcetypes/{crtName}"
+    - "DELETE /api/v1/clustertraits/{clusterTraitName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/componenttypes/{ctName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/projecttypes/{ptName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/resourcetypes/{rtName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/traits/{traitName}"
+    - "GET /api/v1/clustercomponenttypes"
+    - "GET /api/v1/clustercomponenttypes/{cctName}"
+    - "GET /api/v1/clustercomponenttypes/{cctName}/schema"
+    - "GET /api/v1/clusterprojecttypes"
+    - "GET /api/v1/clusterprojecttypes/{cptName}"
+    - "GET /api/v1/clusterprojecttypes/{cptName}/schema"
+    - "GET /api/v1/clusterresourcetypes"
+    - "GET /api/v1/clusterresourcetypes/{crtName}"
+    - "GET /api/v1/clusterresourcetypes/{crtName}/schema"
+    - "GET /api/v1/clustertraits"
+    - "GET /api/v1/clustertraits/{clusterTraitName}"
+    - "GET /api/v1/clustertraits/{clusterTraitName}/schema"
+    - "GET /api/v1/namespaces/{namespaceName}/componenttypes"
+    - "GET /api/v1/namespaces/{namespaceName}/componenttypes/{ctName}"
+    - "GET /api/v1/namespaces/{namespaceName}/componenttypes/{ctName}/schema"
+    - "GET /api/v1/namespaces/{namespaceName}/projecttypes"
+    - "GET /api/v1/namespaces/{namespaceName}/projecttypes/{ptName}"
+    - "GET /api/v1/namespaces/{namespaceName}/projecttypes/{ptName}/schema"
+    - "GET /api/v1/namespaces/{namespaceName}/resourcetypes"
+    - "GET /api/v1/namespaces/{namespaceName}/resourcetypes/{rtName}"
+    - "GET /api/v1/namespaces/{namespaceName}/resourcetypes/{rtName}/schema"
+    - "GET /api/v1/namespaces/{namespaceName}/traits"
+    - "GET /api/v1/namespaces/{namespaceName}/traits/{traitName}"
+    - "GET /api/v1/namespaces/{namespaceName}/traits/{traitName}/schema"
+    - "POST /api/v1/clustercomponenttypes"
+    - "POST /api/v1/clusterprojecttypes"
+    - "POST /api/v1/clusterresourcetypes"
+    - "POST /api/v1/clustertraits"
+    - "POST /api/v1/namespaces/{namespaceName}/componenttypes"
+    - "POST /api/v1/namespaces/{namespaceName}/projecttypes"
+    - "POST /api/v1/namespaces/{namespaceName}/resourcetypes"
+    - "POST /api/v1/namespaces/{namespaceName}/traits"
+    - "PUT /api/v1/clustercomponenttypes/{cctName}"
+    - "PUT /api/v1/clusterprojecttypes/{cptName}"
+    - "PUT /api/v1/clusterresourcetypes/{crtName}"
+    - "PUT /api/v1/clustertraits/{clusterTraitName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/componenttypes/{ctName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/projecttypes/{ptName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/resourcetypes/{rtName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/traits/{traitName}"
+  events: []  # no message broker or topic is used by this feature
+  entities:
+    - "ComponentType"
+    - "ClusterComponentType"
+    - "Trait"
+    - "ClusterTrait"
+    - "ResourceType"
+    - "ClusterResourceType"
+    - "ProjectType"
+    - "ClusterProjectType"
+
+depends_on:
+  internal:
+    - "internal/template"
+    - "internal/schema"
+    - "internal/pipeline/component"
+  external:
+    - "google/cel-go v0.30.0"
+    - "getkin/kin-openapi v0.145.0"
+
+approach:
+  chosen: "Declarative CEL templates with OpenAPI v3 typed parameters, each abstraction offered in a namespaced and a cluster-scoped variant."
+  because: "efficiency: CEL environments are cached across reconciles. robustness: parameters are schema-validated before render. resilience: evaluation is bounded by an explicit cost budget, so one template cannot exhaust the controller."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-001-R1]
+
+failure_modes:
+  - when: "a template exceeds the CEL cost budget"
+    expect: "abort the render with a budget error rather than continuing to evaluate"
+  - when: "a referenced ComponentType or Trait does not exist"
+    expect: "record the condition on the Component; do not cut a release"
+  - when: "a reconcile returns a non-nil error"
+    expect: "requeue with backoff and record the condition on the resource status"
+  - when: "a resource is deleted while dependents exist"
+    expect: "run the finalizer cleanup before releasing the object"
+
+resilience:
+  timeout_ms: "configured per render via the pipeline's render timeout option"
+  retry: "controller-runtime exponential backoff on requeue"
+  idempotency: "none"
+  degraded: "Existing rendered workloads are unaffected; only new renders fail."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Rendering a specific component — that is F-001."
+  - "Executing builds — that is F-006."
+
+traceability:
+  stories: [F-002-US1, F-002-US2, F-002-US3]
+  rules: [DOM-001-R1]
+  tasks: [F-002-T1, F-002-T2, F-002-T3, F-002-T4, F-002-T5, F-002-T6]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-002.md"
+
+open:
+  - "The cost budget's unit and default ceiling are not stated anywhere."
+  - "No record exists of CEL being weighed against Go plugins, CUE, Helm templating or Kustomize."
+  - "The governance rule for choosing namespaced versus cluster scope is not written down."

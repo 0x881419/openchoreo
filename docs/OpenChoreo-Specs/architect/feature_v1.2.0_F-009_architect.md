@@ -41,7 +41,7 @@ OPEN: the happy-path call order above is read off reconciler registration and ow
 ## Failure modes
 | Failure | Detection | Behaviour in code | Evidence |
 | --- | --- | --- | --- |
-| Reconcile error | controller-runtime returns a non-nil error | requeue with backoff; condition recorded on the resource status | [D: internal/controller/conditions.go:1] |
+| Upstream call fails | the client or transport returns an error | the error is surfaced to the caller; no partial state is written locally | [D: internal/occ/resources/client/openapi_client.go:16] |
 
 OPEN: which of these failures page someone, and which are expected steady-state noise? No alerting rule in the repository distinguishes them.
 

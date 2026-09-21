@@ -3,7 +3,7 @@ title: Tasks v1.2.0 F-008 — Secrets Management
 id: F-008
 status: draft
 owner: TBD
-updated: 2026-09-19
+updated: 2026-09-21
 ---
 
 # Tasks v1.2.0 F-008 — Secrets Management

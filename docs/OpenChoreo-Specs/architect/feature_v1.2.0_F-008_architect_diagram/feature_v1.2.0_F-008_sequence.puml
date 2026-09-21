@@ -1,0 +1,85 @@
+@startuml feature_v1.2.0_F-008_sequence
+' Runtime truth for F-008 v1.2.0 — Secrets Management
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-008_front-matter.yaml, name for name.
+title F-008 v1.2.0 — Secrets Management
+autonumber
+
+actor "Developer" as Actor
+actor "Platform engineer" as PE
+participant "openchoreo-api" as API
+participant "secret service" as Svc
+database "Kubernetes API (etcd)" as K8s
+participant "render pipeline" as Pipe
+participant "renderedrelease controller" as RR
+participant "External Secrets Operator" as ESO
+participant "external secret store" as Vault
+participant "workload" as WL
+
+group F-008-US1 — reference a secret by name and have it appear in a workload
+  Actor -> API : POST /api/v1/namespaces/{namespaceName}/secretreferences
+  activate API
+  API -> Svc : create SecretReference
+  Svc -> K8s : create SecretReference
+  K8s --> Svc : created
+  Svc --> API : SecretReference
+  API --> Actor : SecretReference
+  deactivate API
+  note right of API : the request carries a store reference and a key name, never a secret value
+  note right of K8s : the SecretReference controller is a scaffolded stub and performs no work
+  K8s -> Pipe : the reference is read at render time, not reconciled
+  activate Pipe
+  Pipe -> Pipe : derive an ExternalSecret from the secret references
+  Pipe -> K8s : the manifest becomes part of a RenderedRelease
+  deactivate Pipe
+  K8s -> RR : watch RenderedRelease
+  RR -> ESO : server-side apply the ExternalSecret into the data plane
+  activate ESO
+  ESO -> Vault : fetch by key
+  Vault --> ESO : value
+  ESO -> WL : materialise a Kubernetes Secret in the workload namespace
+  deactivate ESO
+end
+
+group F-008-US2 — register credentials for a private git repository once
+  Actor -> API : POST /api/v1alpha1/namespaces/{namespaceName}/gitsecrets
+  API -> K8s : store the reference
+  Actor -> API : DELETE /api/v1alpha1/namespaces/{namespaceName}/gitsecrets/{gitSecretName}
+  note right of API : there is no PUT; rotation is delete then create
+end
+
+group F-008-US3 — choose the backing store per data plane
+  PE -> K8s : set SecretStoreRef on the DataPlane
+end
+
+group failure — the key is missing from the store
+  ESO -> Vault : fetch by key
+  Vault --> ESO : not found
+  ESO -> K8s : ExternalSecret condition not ready
+  note right of ESO : the workload does not start with an empty secret
+end
+
+group failure — reconcile error
+  Ctl -> K8s : update status condition
+  K8s --> Ctl : stored
+  note right of Ctl : requeue with backoff; condition recorded on the resource
+end
+
+group failure — deletion while dependents exist
+  Actor -> API : DELETE the resource
+  API -> K8s : delete
+  K8s -> Ctl : deletionTimestamp set
+  Ctl -> Ctl : finalizer cleanup runs first
+  Ctl -> K8s : remove finalizer
+end
+
+note over Pipe, ESO
+  invariants: DOM-001-R1 a resolved output sets exactly one of value, secretKeyRef, configMapKeyRef
+  no secret value is stored in any OpenChoreo custom resource
+  OPEN: no rotation interval, secret lifetime or revocation path is expressed
+  OPEN: whether OpenBao is the supported store or one of several is unstated
+  OPEN: gitsecrets has no PUT; whether that gap is deliberate is unstated
+  OPEN: the SecretReference reconciler is an empty scaffold; whether work is intended there is unstated
+end note
+@enduml

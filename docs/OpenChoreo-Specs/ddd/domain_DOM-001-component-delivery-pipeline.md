@@ -3,7 +3,7 @@ title: Domain — Component Delivery
 id: DOM-001
 status: draft
 kind: domain
-features: [F-001, F-002, F-003, F-006]
+features: [F-001, F-002, F-003, F-006, F-008]
 owner: TBD
 updated: 2026-09-19
 ---

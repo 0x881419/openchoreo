@@ -3,7 +3,7 @@ title: Tasks v1.2.0 F-002 — Platform Abstractions and Templating
 id: F-002
 status: draft
 owner: TBD
-updated: 2026-09-19
+updated: 2026-09-21
 ---
 
 # Tasks v1.2.0 F-002 — Platform Abstractions and Templating

@@ -3,7 +3,7 @@ title: Tasks v1.2.0 F-006 — Build and Workflow Execution
 id: F-006
 status: draft
 owner: TBD
-updated: 2026-09-19
+updated: 2026-09-21
 ---
 
 # Tasks v1.2.0 F-006 — Build and Workflow Execution

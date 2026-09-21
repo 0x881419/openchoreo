@@ -1,0 +1,152 @@
+# feature_v1.2.0_F-004_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-004"
+feature: "F-004"
+version: "v1.2.0"
+kind: front-matter
+title: "Authorization and Access Control"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Decides every request through a Casbin policy decision point fed by authz custom resources and validated at admission, failing closed on a malformed policy."
+globs:
+  - "api/v1alpha1/authzrole_types.go"
+  - "api/v1alpha1/authzrolebinding_types.go"
+  - "api/v1alpha1/clusterauthzrole_types.go"
+  - "api/v1alpha1/clusterauthzrolebinding_types.go"
+  - "internal/authz/**"
+  - "internal/webhook/authzrolebinding/**"
+  - "internal/webhook/clusterauthzrolebinding/**"
+  - "internal/openchoreo-api/services/authz/**"
+
+participants:
+  - name: "Subject"
+    role: actor
+    path: "external"
+  - name: "Platform engineer"
+    role: actor
+    path: "external"
+  - name: "openchoreo-api"
+    role: entrypoint
+    path: "cmd/openchoreo-api/main.go"
+  - name: "JWT middleware"
+    role: service
+    path: "internal/server/middleware"
+  - name: "authz checker"
+    role: service
+    path: "internal/openchoreo-api/services/authz.go"
+  - name: "Casbin PDP"
+    role: service
+    path: "internal/authz/casbin/pdp.go"
+  - name: "Casbin enforcer"
+    role: service
+    path: "internal/authz/casbin/enforcer.go"
+  - name: "authz watchers"
+    role: service
+    path: "internal/authz/casbin/k8s_watcher.go"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+  - name: "admission webhook"
+    role: service
+    path: "internal/webhook/authzrolebinding"
+
+entrypoints:
+  - kind: HTTP
+    path: "cmd/openchoreo-api/main.go"
+    symbol: "main"
+  - kind: EVENT
+    path: "internal/authz/casbin/k8s_watcher.go"
+    symbol: "SetupAuthzWatchers"
+
+contracts:
+  endpoints:
+    - "DELETE /api/v1/clusterauthzrolebindings/{name}"
+    - "DELETE /api/v1/clusterauthzroles/{name}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/authzrolebindings/{name}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/authzroles/{name}"
+    - "GET /api/v1/authn/subject-types"
+    - "GET /api/v1/authz/actions"
+    - "GET /api/v1/authz/profile"
+    - "GET /api/v1/clusterauthzrolebindings"
+    - "GET /api/v1/clusterauthzrolebindings/{name}"
+    - "GET /api/v1/clusterauthzroles"
+    - "GET /api/v1/clusterauthzroles/{name}"
+    - "GET /api/v1/namespaces/{namespaceName}/authzrolebindings"
+    - "GET /api/v1/namespaces/{namespaceName}/authzrolebindings/{name}"
+    - "GET /api/v1/namespaces/{namespaceName}/authzroles"
+    - "GET /api/v1/namespaces/{namespaceName}/authzroles/{name}"
+    - "POST /api/v1/authz/evaluates"
+    - "POST /api/v1/clusterauthzrolebindings"
+    - "POST /api/v1/clusterauthzroles"
+    - "POST /api/v1/namespaces/{namespaceName}/authzrolebindings"
+    - "POST /api/v1/namespaces/{namespaceName}/authzroles"
+    - "PUT /api/v1/clusterauthzrolebindings/{name}"
+    - "PUT /api/v1/clusterauthzroles/{name}"
+    - "PUT /api/v1/namespaces/{namespaceName}/authzrolebindings/{name}"
+    - "PUT /api/v1/namespaces/{namespaceName}/authzroles/{name}"
+  events: []  # no message broker or topic is used by this feature
+  entities:
+    - "AuthzRole"
+    - "AuthzRoleBinding"
+    - "ClusterAuthzRole"
+    - "ClusterAuthzRoleBinding"
+
+depends_on:
+  internal:
+    - "internal/authz/core"
+    - "internal/authz/casbin"
+    - "internal/server/middleware"
+  external:
+    - "casbin/casbin v2.135.0"
+    - "google/cel-go v0.30.0"
+
+approach:
+  chosen: "A single Casbin PDP fed by custom resources through watchers, with role bindings validated at admission rather than checked per handler."
+  because: "efficiency: the request context is serialised once and reused across every entitlement. robustness: an invalid binding is rejected before it is stored. resilience: a malformed policy fails closed, so no request is silently over-permitted."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-002-R1, DOM-002-R2, DOM-002-R3, DOM-002-R4, DOM-002-R5]
+
+failure_modes:
+  - when: "a policy entry in a custom resource cannot be parsed"
+    expect: "reject the whole custom resource; do not trust a sibling entry that matched"
+  - when: "a rule is removed that was never present"
+    expect: "treat it as a no-op and log at debug"
+  - when: "a role binding sets both Component and Resource scope"
+    expect: "reject it at admission; the binding is never stored"
+  - when: "a resource is deleted while dependents exist"
+    expect: "remove the grouping and policy rules from the enforcer"
+
+resilience:
+  timeout_ms: "none"
+  retry: "none"
+  idempotency: "removing an absent rule is a no-op"
+  degraded: "Existing enforcer state stays in force; a failed policy load does not open access."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Authenticating the caller — the JWT middleware does that."
+  - "Kubernetes RBAC for the control plane's own service accounts."
+
+traceability:
+  stories: [F-004-US1, F-004-US2, F-004-US3]
+  rules: [DOM-002-R1, DOM-002-R2, DOM-002-R3, DOM-002-R4, DOM-002-R5]
+  tasks: [F-004-T1, F-004-T2, F-004-T3, F-004-T4, F-004-T5]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-004.md"
+
+open:
+  - "This is the only CRD family with no controller package; nothing reports drift between enforcer state and the custom resources."
+  - "Whether deny-wins is a stated product guarantee or current behaviour is unrecorded."
+  - "The intended blast radius of the disabled authorizer is unstated."

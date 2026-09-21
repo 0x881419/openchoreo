@@ -1,0 +1,85 @@
+@startuml feature_v1.2.0_F-007_sequence
+' Runtime truth for F-007 v1.2.0 — Observability and Alerting
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-007_front-matter.yaml, name for name.
+title F-007 v1.2.0 — Observability and Alerting
+autonumber
+
+actor "SRE" as Actor
+participant "observer" as Obs
+participant "observer store" as Store
+participant "notifications" as Notif
+database "Kubernetes API (etcd)" as K8s
+participant "alertrule controller" as Ctl
+participant "notification channel controller" as ChanCtl
+participant "event forwarder" as EF
+participant "data plane cluster" as DP
+
+group F-007-US1 — query logs and metrics using the names developers use
+  Actor -> Obs : POST /api/v1/logs/query
+  activate Obs
+  Obs -> Obs : authorize the query against the component scope
+  Obs -> Store : query
+  Store --> Obs : results
+  Obs --> Actor : results
+  deactivate Obs
+  Actor -> Obs : POST /api/v1/metrics/query
+  Actor -> Obs : POST /api/v1alpha1/traces/query
+  Actor -> Obs : GET /api/v1alpha1/costs/namespaces/{namespace}/environments/{environment}
+end
+
+group F-007-US2 — declare an alert rule and receive it on a registered channel
+  Actor -> K8s : create ObservabilityAlertsNotificationChannel
+  K8s -> ChanCtl : watch event
+  ChanCtl -> ChanCtl : register the channel
+  Actor -> K8s : create ObservabilityAlertRule
+  K8s -> Ctl : watch event
+  activate Ctl
+  Ctl -> Ctl : resolve the observer endpoint from configuration
+  Ctl -> Obs : POST /api/v1alpha1/alerts/sources/{sourceType}/rules
+  Obs --> Ctl : rule registered
+  Ctl -> K8s : update status condition
+  deactivate Ctl
+  Obs -> Notif : condition met
+  Notif -> Actor : deliver on the channel (email or webhook)
+end
+
+group F-007-US3 — attach an observability plane to an environment once
+  Actor -> K8s : create ObservabilityPlane
+  DP -> EF : cluster events
+  EF -> Store : forward
+end
+
+group failure — the observer is unreachable
+  Ctl -> Obs : register the rule
+  Obs --> Ctl : error
+  Ctl -> K8s : condition recorded; the rule is not silently considered active
+end
+
+group failure — a channel is deleted while rules reference it
+  K8s -> ChanCtl : deletionTimestamp set
+  ChanCtl -> ChanCtl : cleanup finalizer runs before release
+end
+
+group failure — reconcile error
+  Ctl -> K8s : update ObservabilityAlertRule status condition
+  note right of Ctl : requeue with backoff; the rule is not treated as registered
+end
+
+group failure — deletion while dependents exist
+  Actor -> K8s : delete the alert rule or channel
+  K8s -> ChanCtl : deletionTimestamp set
+  ChanCtl -> Obs : deregister
+  ChanCtl -> K8s : remove the finalizer
+end
+
+note over Obs, Store
+  invariants: an observability plane is reached as a queried service, not a shipped-logs sink
+  the observer exposes a public contract and a separate internal one
+  Hubble flow data is redacted in the cluster agent before it leaves the data plane
+  OPEN: no query timeout, rate limit or result cap is configured
+  OPEN: the retention window and the supported store are unstated
+  OPEN: the trust boundary between the public and internal observer APIs is unstated
+end note
+@enduml

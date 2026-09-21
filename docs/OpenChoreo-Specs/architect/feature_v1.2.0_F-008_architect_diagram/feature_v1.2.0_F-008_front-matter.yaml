@@ -1,0 +1,131 @@
+# feature_v1.2.0_F-008_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-008"
+feature: "F-008"
+version: "v1.2.0"
+kind: front-matter
+title: "Secrets Management"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Keeps secret values out of OpenChoreo resources: a SecretReference names a store and a key, the render pipeline derives an ExternalSecret, and External Secrets Operator resolves it in the data plane."
+globs:
+  - "api/v1alpha1/secretreference_types.go"
+  - "internal/controller/secretreference/**"
+  - "internal/openchoreo-api/services/secret/**"
+  - "internal/openchoreo-api/services/gitsecret/**"
+  - "internal/occ/cmd/secret/**"
+  - "internal/dataplane/kubernetes/types/externalsecrets/**"
+
+participants:
+  - name: "Developer"
+    role: actor
+    path: "external"
+  - name: "Platform engineer"
+    role: actor
+    path: "external"
+  - name: "openchoreo-api"
+    role: entrypoint
+    path: "cmd/openchoreo-api/main.go"
+  - name: "secret service"
+    role: service
+    path: "internal/openchoreo-api/services/secret"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+  - name: "render pipeline"
+    role: service
+    path: "internal/pipeline/component/context/derived.go"
+  - name: "renderedrelease controller"
+    role: service
+    path: "internal/controller/renderedrelease/controller.go"
+  - name: "External Secrets Operator"
+    role: external
+    path: "external"
+  - name: "external secret store"
+    role: external
+    path: "external"
+  - name: "workload"
+    role: external
+    path: "external"
+
+entrypoints:
+  - kind: HTTP
+    path: "cmd/openchoreo-api/main.go"
+    symbol: "main"
+
+contracts:
+  endpoints:
+    - "DELETE /api/v1/namespaces/{namespaceName}/secretreferences/{secretReferenceName}"
+    - "DELETE /api/v1alpha1/namespaces/{namespaceName}/gitsecrets/{gitSecretName}"
+    - "DELETE /api/v1alpha1/namespaces/{namespaceName}/secrets/{secretName}"
+    - "GET /api/v1/namespaces/{namespaceName}/secretreferences"
+    - "GET /api/v1/namespaces/{namespaceName}/secretreferences/{secretReferenceName}"
+    - "GET /api/v1alpha1/namespaces/{namespaceName}/gitsecrets"
+    - "GET /api/v1alpha1/namespaces/{namespaceName}/secrets"
+    - "GET /api/v1alpha1/namespaces/{namespaceName}/secrets/{secretName}"
+    - "POST /api/v1/namespaces/{namespaceName}/secretreferences"
+    - "POST /api/v1alpha1/namespaces/{namespaceName}/gitsecrets"
+    - "POST /api/v1alpha1/namespaces/{namespaceName}/secrets"
+    - "PUT /api/v1/namespaces/{namespaceName}/secretreferences/{secretReferenceName}"
+    - "PUT /api/v1alpha1/namespaces/{namespaceName}/secrets/{secretName}"
+  events: []  # no message broker or topic is used by this feature
+  entities:
+    - "SecretReference"
+
+depends_on:
+  internal:
+    - "internal/pipeline/component/context"
+    - "internal/dataplane/kubernetes/types/externalsecrets"
+  external:
+    - "External Secrets Operator"
+    - "OpenBao or another supported store"
+
+approach:
+  chosen: "No secret value is ever stored in an OpenChoreo resource: kinds carry a store reference and a key name, and resolution happens in the data plane through ESO."
+  because: "efficiency: no secret material passes through the control plane. robustness: a missing key leaves the ExternalSecret not-ready rather than starting a workload with an empty value. resilience: rotation in the external store propagates without redeploying."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-001-R1]
+
+failure_modes:
+  - when: "the key is absent from the external store"
+    expect: "leave the ExternalSecret not ready; do not start the workload with an empty secret"
+  - when: "a reconcile returns a non-nil error"
+    expect: "requeue with backoff and record the condition on the resource status"
+  - when: "a resource is deleted while dependents exist"
+    expect: "run the finalizer cleanup before releasing the object"
+
+resilience:
+  timeout_ms: "none"
+  retry: "the External Secrets Operator refresh interval"
+  idempotency: "a reference is keyed by store and key name"
+  degraded: "Already-materialised secrets stay in the workload namespace when the store is unreachable."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Storing secret material."
+  - "Rotating credentials in the external store."
+
+traceability:
+  stories: [F-008-US1, F-008-US2, F-008-US3]
+  rules: [DOM-001-R1]
+  tasks: [F-008-T1, F-008-T2, F-008-T3, F-008-T4, F-008-T5, F-008-T6]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-008.md"
+
+open:
+  - "No rotation interval, secret lifetime or revocation path is expressed."
+  - "Whether OpenBao is the supported store or one of several is unstated."
+  - "gitsecrets supports no PUT; whether that gap is deliberate is unstated."
+  - "The SecretReference reconciler is an empty scaffold; whether work is intended there is unstated."

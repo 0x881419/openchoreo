@@ -1,0 +1,85 @@
+@startuml feature_v1.2.0_F-002_sequence
+' Runtime truth for F-002 v1.2.0 — Platform Abstractions and Templating
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-002_front-matter.yaml, name for name.
+title F-002 v1.2.0 — Platform Abstractions and Templating
+autonumber
+
+actor "Platform engineer" as PE
+actor "Developer" as Dev
+participant "openchoreo-api" as API
+participant "componenttype service" as Svc
+participant "schema extractor" as Schema
+database "Kubernetes API (etcd)" as K8s
+participant "componenttype controller" as Ctl
+participant "CEL template engine" as CEL
+
+group F-002-US1 — define a component type once and offer it to every team as a golden path
+  PE -> API : POST /api/v1/namespaces/{namespaceName}/componenttypes
+  activate API
+  API -> Svc : create ComponentType
+  Svc -> K8s : create ComponentType
+  K8s --> Svc : created
+  Svc --> API : ComponentType
+  API --> PE : ComponentType
+  deactivate API
+  K8s -> Ctl : watch event
+  Ctl -> Ctl : validate the declared parameter schema
+  Ctl -> K8s : update status condition
+end
+
+group F-002-US2 — attach reusable behaviour without changing the component's type
+  PE -> API : POST /api/v1/namespaces/{namespaceName}/traits
+  API -> K8s : create Trait
+  note right of K8s : the trait's patches are applied by the render pipeline, not here
+end
+
+group F-002-US3 — discover what parameters an abstraction accepts before using it
+  Dev -> API : GET .../componenttypes/{ctName}/schema
+  activate API
+  API -> Svc : read ComponentType
+  Svc -> K8s : get ComponentType
+  K8s --> Svc : ComponentType
+  Svc -> Schema : extract OpenAPI v3 parameter schema, resolve $ref
+  Schema --> Svc : schema
+  Svc --> API : schema
+  API --> Dev : schema
+  deactivate API
+end
+
+group render time — the abstraction is evaluated
+  CEL -> CEL : evaluate parameters, defaults and overrides under a cost budget
+  alt cost budget exceeded
+    CEL --> CEL : render aborted with a budget error
+  end
+end
+
+group failure — the referenced type or trait does not exist
+  Ctl -> K8s : get ComponentType
+  K8s --> Ctl : NotFound
+  Ctl -> K8s : condition recorded on the Component, no release is cut
+end
+
+group failure — reconcile error
+  Ctl -> K8s : update status condition
+  K8s --> Ctl : stored
+  note right of Ctl : requeue with backoff; condition recorded on the resource
+end
+
+group failure — deletion while dependents exist
+  Actor -> API : DELETE the resource
+  API -> K8s : delete
+  K8s -> Ctl : deletionTimestamp set
+  Ctl -> Ctl : finalizer cleanup runs first
+  Ctl -> K8s : remove finalizer
+end
+
+note over CEL
+  invariants: DOM-001-R1 a ResourceType output sets exactly one of value, secretKeyRef, configMapKeyRef
+  every abstraction exists namespaced and cluster-scoped; scope is fixed per kind
+  render cost: bounded by an explicit CEL budget
+  OPEN: the budget's unit and default ceiling are not stated anywhere
+  OPEN: no timeout or retry is configured for schema extraction
+end note
+@enduml

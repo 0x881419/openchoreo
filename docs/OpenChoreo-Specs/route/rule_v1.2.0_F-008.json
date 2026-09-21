@@ -1,0 +1,51 @@
+{
+  "version": "v1.2.0",
+  "feature_id": "F-008",
+  "feature_title": "Secrets Management",
+  "objective": "Implement F-008 exactly as specified by the documents listed in reads.",
+  "reads": {
+    "domain": [
+      "docs/OpenChoreo-Specs/ddd/domain_DOM-001-component-delivery-pipeline.md",
+      "docs/OpenChoreo-Specs/ddd/domain_DOM-002-authorization.md"
+    ],
+    "prd": [
+      "docs/OpenChoreo-Specs/PRDs/prd.md",
+      "docs/OpenChoreo-Specs/PRDs/prd_v1.2.0_F-008-secrets-management.md"
+    ],
+    "adrs": [
+      "docs/OpenChoreo-Specs/ADRs/adrs_ADR-0001-record-architecture-decisions.md"
+    ],
+    "architecture": [
+      "docs/OpenChoreo-Specs/architect/architect_common.md",
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-008_architect_diagram/feature_v1.2.0_F-008_front-matter.yaml",
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-008_architect.md",
+      "docs/OpenChoreo-Specs/architect/feature_v1.2.0_F-008_architect_diagram/feature_v1.2.0_F-008_sequence.puml"
+    ],
+    "data": [],
+    "tasks": [
+      "docs/OpenChoreo-Specs/tasks/tasks_v1.2.0_F-008.md"
+    ],
+    "tests": [
+      "docs/OpenChoreo-Specs/tests/testing_strategy.md",
+      "docs/OpenChoreo-Specs/tests/test_v1.2.0_F-008.md"
+    ],
+    "runbooks": [
+      "docs/OpenChoreo-Specs/runbook/runbook_DEV_RB-001-local-setup.md"
+    ]
+  },
+  "writes": {
+    "code": [],
+    "tests": []
+  },
+  "guardrails": [
+    "Do not invent requirements: if a document is silent, stop and ask.",
+    "Do not change any file under docs/ while executing this route.",
+    "Follow architect_common.md for naming, quality and security; it overrides personal preference.",
+    "One task from tasks_v1.2.0_F-008.md at a time, in the stated order."
+  ],
+  "exit_criteria": [
+    "Every acceptance criterion in the feature PRD has a passing test.",
+    "Review checklist in architect_common.md passes.",
+    "tasks_v1.2.0_F-008.md status column is complete."
+  ]
+}

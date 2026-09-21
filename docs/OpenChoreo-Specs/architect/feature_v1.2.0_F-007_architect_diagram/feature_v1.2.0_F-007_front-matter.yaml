@@ -1,0 +1,151 @@
+# feature_v1.2.0_F-007_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-007"
+feature: "F-007"
+version: "v1.2.0"
+kind: front-matter
+title: "Observability and Alerting"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Serves logs, metrics, traces and cost from the observability plane behind its own contract, and reconciles declarative alert rules and notification channels against that service."
+globs:
+  - "api/v1alpha1/observabilityalertrule_types.go"
+  - "api/v1alpha1/observabilityalertsnotificationchannel_types.go"
+  - "api/v1alpha1/observabilityplane_types.go"
+  - "internal/observer/**"
+  - "internal/controller/observabilityalertrule/**"
+  - "internal/controller/observabilityalertsnotificationchannel/**"
+  - "internal/eventforwarder/**"
+  - "pkg/observability/**"
+
+participants:
+  - name: "SRE"
+    role: actor
+    path: "external"
+  - name: "observer"
+    role: entrypoint
+    path: "cmd/observer/main.go"
+  - name: "observer store"
+    role: store
+    path: "internal/observer/store"
+  - name: "notifications"
+    role: service
+    path: "internal/observer/notifications"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+  - name: "alertrule controller"
+    role: service
+    path: "internal/controller/observabilityalertrule/controller.go"
+  - name: "notification channel controller"
+    role: service
+    path: "internal/controller/observabilityalertsnotificationchannel/controller.go"
+  - name: "event forwarder"
+    role: service
+    path: "internal/eventforwarder"
+  - name: "data plane cluster"
+    role: external
+    path: "external"
+
+entrypoints:
+  - kind: HTTP
+    path: "cmd/observer/main.go"
+    symbol: "main"
+  - kind: EVENT
+    path: "internal/controller/observabilityalertrule/controller.go"
+    symbol: "Reconcile"
+  - kind: JOB
+    path: "cmd/event-forwarder/main.go"
+    symbol: "main"
+
+contracts:
+  endpoints:
+    - "DELETE /api/v1/namespaces/{namespaceName}/observabilityalertsnotificationchannels/{observabilityAlertsNotificationChannelName}"
+    - "DELETE /api/v1alpha1/alerts/sources/{sourceType}/rules/{ruleName}"
+    - "GET /api/v1/namespaces/{namespaceName}/observabilityalertsnotificationchannels"
+    - "GET /api/v1/namespaces/{namespaceName}/observabilityalertsnotificationchannels/{observabilityAlertsNotificationChannelName}"
+    - "GET /api/v1alpha1/alerts/sources/{sourceType}/rules/{ruleName}"
+    - "GET /api/v1alpha1/costs/namespaces/{namespace}/environments/{environment}"
+    - "GET /api/v1alpha1/costs/namespaces/{namespace}/environments/{environment}/recommendations"
+    - "GET /api/v1alpha1/platform-logs"
+    - "GET /api/v1alpha1/traces/{traceId}/spans/{spanId}"
+    - "POST /api/v1/events/query"
+    - "POST /api/v1/logs/query"
+    - "POST /api/v1/metrics/query"
+    - "POST /api/v1/namespaces/{namespaceName}/observabilityalertsnotificationchannels"
+    - "POST /api/v1alpha1/alerts/query"
+    - "POST /api/v1alpha1/alerts/sources/{sourceType}/rules"
+    - "POST /api/v1alpha1/alerts/webhook"
+    - "POST /api/v1alpha1/incidents/query"
+    - "POST /api/v1alpha1/metrics/runtime-topology"
+    - "POST /api/v1alpha1/traces/query"
+    - "POST /api/v1alpha1/traces/{traceId}/spans/query"
+    - "PUT /api/v1/namespaces/{namespaceName}/observabilityalertsnotificationchannels/{observabilityAlertsNotificationChannelName}"
+    - "PUT /api/v1alpha1/alerts/sources/{sourceType}/rules/{ruleName}"
+    - "PUT /api/v1alpha1/incidents/{incidentId}"
+  events: []  # no message broker or topic is used by this feature
+  entities:
+    - "ObservabilityAlertRule"
+    - "ObservabilityAlertsNotificationChannel"
+    - "ObservabilityPlane"
+
+depends_on:
+  internal:
+    - "internal/observer/service"
+    - "internal/observer/store"
+    - "internal/observer/notifications"
+  external:
+    - "OpenSearch"
+    - "OpenTelemetry SDK"
+    - "Prometheus client"
+
+approach:
+  chosen: "Observability is a queried plane behind its own OpenAPI contract, with a separate internal contract, and alerting expressed as custom resources reconciled against that service."
+  because: "efficiency: queries are scoped by the same names developers already use. robustness: a rule is not treated as registered until the observer confirms it. resilience: a channel deletion runs a cleanup finalizer so rules never point at a channel that is gone."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-003-R1]
+
+failure_modes:
+  - when: "the observer is unreachable when registering a rule"
+    expect: "record the condition; do not treat the rule as active"
+  - when: "a notification channel is deleted while rules reference it"
+    expect: "run the cleanup finalizer to deregister before releasing the object"
+  - when: "a reconcile returns a non-nil error"
+    expect: "requeue with backoff and record the condition on the resource status"
+  - when: "a resource is deleted while dependents exist"
+    expect: "run the finalizer cleanup before releasing the object"
+
+resilience:
+  timeout_ms: "none"
+  retry: "controller-runtime exponential backoff on requeue"
+  idempotency: "a rule is identified by its source type and rule name"
+  degraded: "Workloads are unaffected; queries and alert delivery stop when the plane is down."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Storing telemetry itself — the observability plane does."
+  - "Deciding what to alert on."
+
+traceability:
+  stories: [F-007-US1, F-007-US2, F-007-US3]
+  rules: [DOM-003-R1]
+  tasks: [F-007-T1, F-007-T2, F-007-T3, F-007-T4, F-007-T5, F-007-T6]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-007.md"
+
+open:
+  - "Which signals are first-class and which are adapters is unstated; four adapter specs exist."
+  - "The retention window and the supported store are unstated."
+  - "The trust boundary between the public and internal observer APIs is unstated."

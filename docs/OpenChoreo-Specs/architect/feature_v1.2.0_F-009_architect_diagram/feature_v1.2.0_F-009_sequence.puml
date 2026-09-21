@@ -1,0 +1,82 @@
+@startuml feature_v1.2.0_F-009_sequence
+' Runtime truth for F-009 v1.2.0 — Client Surfaces occ CLI and MCP
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-009_front-matter.yaml, name for name.
+title F-009 v1.2.0 — Client Surfaces occ CLI and MCP
+autonumber
+
+actor "Developer" as Dev
+actor "AI agent" as Agent
+participant "occ CLI" as OCC
+participant "generated OpenAPI client" as Gen
+participant "MCP server" as MCP
+participant "MCP handlers" as MH
+participant "openchoreo-api" as API
+participant "service layer" as Svc
+participant "audit middleware" as Audit
+database "Kubernetes API (etcd)" as K8s
+
+group F-009-US1 — one CLI for every platform resource, with the same shape as the API
+  Dev -> OCC : occ login
+  activate OCC
+  OCC -> API : OIDC authorization code with PKCE
+  API --> OCC : token
+  deactivate OCC
+  Dev -> OCC : occ <kind> <verb>
+  activate OCC
+  OCC -> Gen : typed call
+  Gen -> API : HTTP request against the generated contract
+  API -> Audit : record the operation
+  API -> Svc : dispatch
+  Svc -> K8s : read or write the custom resource
+  K8s --> Svc : result
+  Svc --> API : result
+  API --> Gen : response
+  Gen --> OCC : typed result
+  OCC --> Dev : rendered output
+  deactivate OCC
+end
+
+group F-009-US2 — operate the platform through typed tools rather than by shelling out
+  Agent -> MCP : call a registered tool
+  activate MCP
+  MCP -> MCP : authenticate the bearer token
+  MCP -> MH : dispatch to the toolset handler
+  MH -> Svc : the same service the HTTP handler calls
+  Svc -> K8s : read or write
+  K8s --> Svc : result
+  Svc --> MH : result
+  MH --> MCP : JSON-encoded result
+  MCP --> Agent : tool result
+  deactivate MCP
+  alt unauthenticated
+    MCP --> Agent : unauthenticated, with the protected-resource metadata URL
+  end
+end
+
+group F-009-US3 — every action is audited identically whoever performed it
+  Audit -> Audit : resolve the operation from the generated definitions table
+  alt the operation is exempt
+    Audit -> Audit : no event emitted
+  else
+    Audit -> Audit : emit an audit event with surface and user agent
+  end
+  note right of Audit : MCP calls resolve through their own bindings beside the HTTP definitions
+end
+
+group failure — the control plane is unreachable
+  Gen -> API : request
+  API --> Gen : transport error
+  Gen --> OCC : error surfaced to the user, no partial local state is written
+end
+
+note over MCP, Svc
+  invariants: DOM-002-R4 the request context is serialised once per request
+  DOM-002-R5 exec and wirelogs authenticate outside the standard middleware order
+  the CLI and MCP are two presentations of one service layer, audited through one generated table
+  OPEN: no client timeout or retry policy is configured
+  OPEN: the selection rule behind 25 MCP tools over 214 API operations is unstated
+  OPEN: which tools are safe for an unattended agent is unstated
+end note
+@enduml

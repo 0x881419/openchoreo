@@ -1,0 +1,120 @@
+# feature_v1.2.0_F-009_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-009"
+feature: "F-009"
+version: "v1.2.0"
+kind: front-matter
+title: "Client Surfaces occ CLI and MCP"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Presents the control plane through two surfaces over one service layer — the occ CLI via the generated OpenAPI client, and an MCP server for agents — both audited through the same generated table."
+globs:
+  - "internal/occ/**"
+  - "pkg/mcp/**"
+  - "internal/openchoreo-api/mcphandlers/**"
+  - "internal/openchoreo-api/api/gen/**"
+  - "internal/openchoreo-api/audit/**"
+  - "cmd/occ/**"
+
+participants:
+  - name: "Developer"
+    role: actor
+    path: "external"
+  - name: "AI agent"
+    role: actor
+    path: "external"
+  - name: "occ CLI"
+    role: entrypoint
+    path: "cmd/occ/main.go"
+  - name: "generated OpenAPI client"
+    role: service
+    path: "internal/occ/resources/client/openapi_client.go"
+  - name: "MCP server"
+    role: entrypoint
+    path: "pkg/mcp/server.go"
+  - name: "MCP handlers"
+    role: service
+    path: "internal/openchoreo-api/mcphandlers"
+  - name: "openchoreo-api"
+    role: entrypoint
+    path: "cmd/openchoreo-api/main.go"
+  - name: "service layer"
+    role: service
+    path: "internal/openchoreo-api/services"
+  - name: "audit middleware"
+    role: service
+    path: "internal/server/middleware/audit"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+
+entrypoints:
+  - kind: CLI
+    path: "cmd/occ/main.go"
+    symbol: "main"
+  - kind: HTTP
+    path: "pkg/mcp/server.go"
+    symbol: "NewHTTPServer"
+
+contracts:
+  endpoints:
+  endpoints: []
+  events: []  # no message broker or topic is used by this feature
+  entities: []
+
+depends_on:
+  internal:
+    - "internal/openchoreo-api/services"
+    - "internal/openchoreo-api/audit"
+    - "pkg/mcp/tools"
+  external:
+    - "modelcontextprotocol/go-sdk v1.4.1"
+    - "spf13/cobra v1.10.2"
+    - "an OIDC provider"
+
+approach:
+  chosen: "The CLI and the MCP server are two presentations of one service layer rather than two implementations, both routed through the same generated audit table."
+  because: "efficiency: one service layer to maintain, and the client is generated from the same spec as the server. robustness: a new endpoint cannot escape auditing without an explicit exemption. resilience: a transport failure surfaces to the caller with no partial local state written."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-002-R4, DOM-002-R5]
+
+failure_modes:
+  - when: "the control plane is unreachable"
+    expect: "surface the error to the caller and write no partial local state"
+  - when: "an MCP call arrives unauthenticated"
+    expect: "reject it and return the protected-resource metadata location"
+
+resilience:
+  timeout_ms: "none"
+  retry: "none"
+  idempotency: "each command maps to one API operation; none are batched locally"
+  degraded: "occ can read its local configuration and cached credentials; no platform operation succeeds offline."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Implementing platform behaviour — it calls the service layer."
+  - "Serving the web portal, which is built in a separate repository."
+
+traceability:
+  stories: [F-009-US1, F-009-US2, F-009-US3]
+  rules: [DOM-002-R4, DOM-002-R5]
+  tasks: [F-009-T1, F-009-T2]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-009.md"
+
+open:
+  - "No client timeout or retry policy is configured."
+  - "The selection rule behind 25 MCP tools over 214 API operations is unstated."
+  - "Which MCP tools are safe for an unattended agent is unstated."

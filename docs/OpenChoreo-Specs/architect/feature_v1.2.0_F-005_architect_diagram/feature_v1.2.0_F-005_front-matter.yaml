@@ -1,0 +1,191 @@
+# feature_v1.2.0_F-005_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-005"
+feature: "F-005"
+version: "v1.2.0"
+kind: front-matter
+title: "Multi-Plane Topology and Connectivity"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Connects the control plane to managed clusters without inbound firewall rules: agents dial out, the gateway fabric routes work back, and occ remote tunnels to a workload without the bytes crossing the control plane."
+globs:
+  - "api/v1alpha1/dataplane_types.go"
+  - "api/v1alpha1/workflowplane_types.go"
+  - "api/v1alpha1/observabilityplane_types.go"
+  - "api/v1alpha1/environment_types.go"
+  - "api/v1alpha1/deploymentpipeline_types.go"
+  - "internal/cluster-gateway/**"
+  - "internal/cluster-agent/**"
+  - "internal/remoteconnect/**"
+  - "internal/remote-agent/**"
+  - "internal/clients/gateway/**"
+  - "internal/controller/dataplane/**"
+  - "internal/controller/environment/**"
+
+participants:
+  - name: "Platform engineer"
+    role: actor
+    path: "external"
+  - name: "Developer"
+    role: actor
+    path: "external"
+  - name: "openchoreo-api"
+    role: entrypoint
+    path: "cmd/openchoreo-api/main.go"
+  - name: "cluster gateway"
+    role: service
+    path: "internal/cluster-gateway/server.go"
+  - name: "gateway fabric"
+    role: service
+    path: "internal/cluster-gateway/fabric/fabric.go"
+  - name: "cluster agent"
+    role: service
+    path: "internal/cluster-agent/agent.go"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+  - name: "remote agent"
+    role: service
+    path: "internal/remote-agent"
+  - name: "data plane cluster"
+    role: external
+    path: "external"
+
+entrypoints:
+  - kind: HTTP
+    path: "cmd/openchoreo-api/main.go"
+    symbol: "main"
+  - kind: HTTP
+    path: "cmd/cluster-gateway/main.go"
+    symbol: "main"
+  - kind: JOB
+    path: "cmd/cluster-agent/main.go"
+    symbol: "main"
+  - kind: JOB
+    path: "cmd/remote-agent/main.go"
+    symbol: "main"
+
+contracts:
+  endpoints:
+    - "DELETE /api/v1/clusterdataplanes/{cdpName}"
+    - "DELETE /api/v1/clusterobservabilityplanes/{clusterObservabilityPlaneName}"
+    - "DELETE /api/v1/clusterworkflowplanes/{clusterWorkflowPlaneName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/dataplanes/{dpName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/deploymentpipelines/{deploymentPipelineName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/environments/{envName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/observabilityplanes/{observabilityPlaneName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/workflowplanes/{workflowPlaneName}"
+    - "GET /api/v1/clusterdataplanes"
+    - "GET /api/v1/clusterdataplanes/{cdpName}"
+    - "GET /api/v1/clusterobservabilityplanes"
+    - "GET /api/v1/clusterobservabilityplanes/{clusterObservabilityPlaneName}"
+    - "GET /api/v1/clusterworkflowplanes"
+    - "GET /api/v1/clusterworkflowplanes/{clusterWorkflowPlaneName}"
+    - "GET /api/v1/namespaces"
+    - "GET /api/v1/namespaces/{namespaceName}/dataplanes"
+    - "GET /api/v1/namespaces/{namespaceName}/dataplanes/{dpName}"
+    - "GET /api/v1/namespaces/{namespaceName}/deploymentpipelines"
+    - "GET /api/v1/namespaces/{namespaceName}/deploymentpipelines/{deploymentPipelineName}"
+    - "GET /api/v1/namespaces/{namespaceName}/environments"
+    - "GET /api/v1/namespaces/{namespaceName}/environments/{envName}"
+    - "GET /api/v1/namespaces/{namespaceName}/observabilityplanes"
+    - "GET /api/v1/namespaces/{namespaceName}/observabilityplanes/{observabilityPlaneName}"
+    - "GET /api/v1/namespaces/{namespaceName}/workflowplanes"
+    - "GET /api/v1/namespaces/{namespaceName}/workflowplanes/{workflowPlaneName}"
+    - "GET /api/v1/namespaces/{namespace}/environments/{environment}/wirelogs"
+    - "GET /namespaces/ns/projects/p"
+    - "POST /api/v1/clusterdataplanes"
+    - "POST /api/v1/clusterobservabilityplanes"
+    - "POST /api/v1/clusterworkflowplanes"
+    - "POST /api/v1/namespaces"
+    - "POST /api/v1/namespaces/{namespaceName}/dataplanes"
+    - "POST /api/v1/namespaces/{namespaceName}/deploymentpipelines"
+    - "POST /api/v1/namespaces/{namespaceName}/environments"
+    - "POST /api/v1/namespaces/{namespaceName}/observabilityplanes"
+    - "POST /api/v1/namespaces/{namespaceName}/workflowplanes"
+    - "POST /api/v1/remote-connect:authorize"
+    - "POST /api/v1/remote-connect:heartbeat"
+    - "POST /api/v1/remote-connect:resolve"
+    - "PUT /api/v1/clusterdataplanes/{cdpName}"
+    - "PUT /api/v1/clusterobservabilityplanes/{clusterObservabilityPlaneName}"
+    - "PUT /api/v1/clusterworkflowplanes/{clusterWorkflowPlaneName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/dataplanes/{dpName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/deploymentpipelines/{deploymentPipelineName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/environments/{envName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/observabilityplanes/{observabilityPlaneName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/workflowplanes/{workflowPlaneName}"
+  events: []  # no message broker or topic is used by this feature
+  entities:
+    - "DataPlane"
+    - "ClusterDataPlane"
+    - "WorkflowPlane"
+    - "ClusterWorkflowPlane"
+    - "ObservabilityPlane"
+    - "ClusterObservabilityPlane"
+    - "Environment"
+    - "DeploymentPipeline"
+
+depends_on:
+  internal:
+    - "internal/remoteconnect"
+    - "internal/cluster-gateway/fabric"
+    - "internal/clients/gateway"
+  external:
+    - "hashicorp/yamux v0.1.2"
+    - "gorilla/websocket"
+    - "cilium/cilium v1.20.0"
+
+approach:
+  chosen: "The managed cluster dials out and the gateway multiplexes work back over that connection; occ remote keeps the control plane in the authorization path but out of the byte path."
+  because: "efficiency: registry lookup is local-memory only, so no request blocks on a network call to locate an agent. robustness: never-dispatched and outcome-unknown stay distinguishable, so a caller never retries an ambiguous write. resilience: widening backoff on dial, snapshot repair on a sequence gap, and rebalancing with slack above fair share."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-003-R1, DOM-003-R3, DOM-003-R5, DOM-003-R6, DOM-003-R7, DOM-003-R8, DOM-003-R10]
+
+failure_modes:
+  - when: "the pod holds no link to the owning peer"
+    expect: "fail immediately with a retryable sentinel so the caller can try another replica"
+  - when: "the request was already on the wire when the link dropped"
+    expect: "report the outcome as unknown, never as safe to retry"
+  - when: "a peer cannot be dialled"
+    expect: "retry with a widening backoff, never in a tight loop"
+  - when: "a registry sequence gap is detected"
+    expect: "request a full snapshot from the owner and do not apply the gapped delta"
+  - when: "a reconcile returns a non-nil error"
+    expect: "requeue with backoff and record the condition on the resource status"
+  - when: "a resource is deleted while dependents exist"
+    expect: "run the finalizer cleanup and unregister the connections the pod owned"
+
+resilience:
+  timeout_ms: "none configured for forwarding; pod log reads are capped at 10485760 bytes"
+  retry: "widening backoff on peer dial; snapshot repair on sequence gap"
+  idempotency: "none"
+  degraded: "Agents stay connected and workloads keep running when a gateway replica is lost; lookups move to the surviving owner."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Running the workloads themselves."
+  - "Authorizing the operations it transports — that is F-004."
+
+traceability:
+  stories: [F-005-US1, F-005-US2, F-005-US3]
+  rules: [DOM-003-R1, DOM-003-R3, DOM-003-R5, DOM-003-R6, DOM-003-R7, DOM-003-R8, DOM-003-R10]
+  tasks: [F-005-T1, F-005-T2, F-005-T3, F-005-T4, F-005-T5, F-005-T6]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-005.md"
+
+open:
+  - "No connection ceiling per gateway replica is stated, though rebalance slack implies a fairness target."
+  - "The capability's lifetime and what revokes one mid-session are unstated."
+  - "Whether single-cluster is a supported production topology or only a development convenience is unstated."

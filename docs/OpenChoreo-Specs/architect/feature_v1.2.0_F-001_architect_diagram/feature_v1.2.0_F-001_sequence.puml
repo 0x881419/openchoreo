@@ -1,0 +1,102 @@
+@startuml feature_v1.2.0_F-001_sequence
+' Runtime truth for F-001 v1.2.0 — Component Delivery Pipeline
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-001_front-matter.yaml, name for name.
+title F-001 v1.2.0 — Component Delivery Pipeline
+autonumber
+
+actor "Developer" as Actor
+participant "openchoreo-api" as API
+participant "component service" as Svc
+database "Kubernetes API (etcd)" as K8s
+participant "component controller" as Ctl
+participant "releasebinding controller" as RB
+participant "component render pipeline" as Pipe
+participant "renderedrelease controller" as RR
+participant "data plane cluster" as DP
+
+group F-001-US1 — declare a component once and have it deployed to every environment the pipeline defines
+  Actor -> API : POST /api/v1/namespaces/{namespaceName}/components
+  activate API
+  API -> Svc : create Component
+  Svc -> K8s : create Component
+  K8s --> Svc : created
+  Svc --> API : Component
+  API --> Actor : Component
+  deactivate API
+
+  K8s -> Ctl : watch event
+  activate Ctl
+  Ctl -> K8s : fetch ComponentType, Workload, Traits, DeploymentPipeline
+  Ctl -> Ctl : validate type, workload, traits, pipeline
+  Ctl -> K8s : ensureComponentRelease (immutable snapshot)
+  Ctl -> K8s : ensureReleaseBinding (first environment)
+  deactivate Ctl
+
+  K8s -> RB : watch ReleaseBinding
+  activate RB
+  RB -> Pipe : Render(ComponentType, Traits, Workload, ReleaseBinding, Environment, DataPlane)
+  activate Pipe
+  Pipe -> Pipe : build CEL context, render base resources, apply trait patches, post-process
+  Pipe --> RB : rendered manifests
+  deactivate Pipe
+  RB -> K8s : create RenderedRelease (data plane)
+  RB -> K8s : create RenderedRelease (observability plane)
+  deactivate RB
+
+  K8s -> RR : watch RenderedRelease
+  activate RR
+  RR -> RR : resolve target plane client
+  RR -> DP : server-side apply, ForceOwnership, FieldOwner
+  DP --> RR : applied
+  RR -> K8s : condition ApplySucceeded
+  deactivate RR
+end
+
+group F-001-US2 — see the concrete Kubernetes objects a component produced, without cluster access
+  Actor -> API : GET .../releasebindings/{releaseBindingName}/k8sresources/tree
+  API -> DP : read via cluster gateway
+  DP --> API : resource tree
+  API --> Actor : tree
+  Actor -> API : GET .../k8sresources/events
+  Actor -> API : GET .../k8sresources/logs
+  API --> Actor : events, logs
+end
+
+group F-001-US3 — cut a release of a component on demand
+  Actor -> API : POST .../components/{componentName}/generate-release
+  API -> K8s : create ComponentRelease
+  Actor -> API : POST /api/v1alpha1/.../releasebindings/{releaseBindingName}/trigger
+  API -> K8s : trigger the binding
+end
+
+group failure — apply to the data plane fails
+  RR -> DP : server-side apply
+  DP --> RR : error
+  RR -> K8s : condition ApplyFailed
+  RR --> RR : requeue; the RenderedRelease is retried, the workload is left as it was
+end
+
+group failure — reconcile error
+  Ctl -> K8s : update status condition
+  K8s --> Ctl : stored
+  note right of Ctl : requeue with backoff; condition recorded on the resource
+end
+
+group failure — deletion while dependents exist
+  Actor -> API : DELETE the resource
+  API -> K8s : delete
+  K8s -> Ctl : deletionTimestamp set
+  Ctl -> Ctl : finalizer cleanup runs first
+  Ctl -> K8s : remove finalizer
+end
+
+note over RB, RR
+  invariants: DOM-001-R3 one route kind per endpoint per visibility
+  DOM-001-R5 a ComponentRelease is immutable; variation lives on the binding
+  render cost: CEL budget configured via CELCostLimit
+  OPEN: no timeout, retry policy or idempotency key is configured for the apply path
+  log read is capped at 10 MB per container
+end note
+@enduml

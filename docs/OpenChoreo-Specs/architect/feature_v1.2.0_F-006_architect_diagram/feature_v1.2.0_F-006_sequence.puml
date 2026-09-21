@@ -1,0 +1,96 @@
+@startuml feature_v1.2.0_F-006_sequence
+' Runtime truth for F-006 v1.2.0 — Build and Workflow Execution
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-006_front-matter.yaml, name for name.
+title F-006 v1.2.0 — Build and Workflow Execution
+autonumber
+
+actor "Git provider" as Git
+actor "Developer" as Actor
+participant "openchoreo-api" as API
+participant "autobuild webhook processor" as Auto
+participant "workflowrun service" as WFSvc
+database "Kubernetes API (etcd)" as K8s
+participant "workflowrun controller" as Ctl
+participant "workflow render pipeline" as Pipe
+participant "workflow plane (Argo)" as WP
+participant "registry" as Reg
+
+group F-006-US1 — point at a git repository and get a running workload
+  Git -> API : POST /api/v1alpha1/autobuild (push event)
+  activate API
+  API -> Auto : process the webhook
+  Auto -> Auto : detect the git provider from the request headers
+  Auto -> K8s : resolve the component from the repository and branch
+  Auto -> WFSvc : TriggerWorkflow(namespace, project, component, commit)
+  activate WFSvc
+  WFSvc -> K8s : create WorkflowRun
+  K8s --> WFSvc : created
+  WFSvc --> Auto : WorkflowRunTriggerResponse
+  deactivate WFSvc
+  Auto --> API : accepted
+  API --> Git : accepted
+  deactivate API
+  K8s -> Ctl : watch event
+  activate Ctl
+  Ctl -> Pipe : render the workflow template with its parameters
+  Pipe --> Ctl : Argo Workflow manifest
+  Ctl -> WP : create the Argo Workflow
+  WP -> WP : build with cloud native Buildpacks
+  WP -> Reg : push the image
+  WP --> Ctl : phase updates
+  Ctl -> K8s : update WorkflowRun status
+  deactivate Ctl
+end
+
+group F-006-US2 — watch a build without access to the workflow plane
+  Actor -> API : GET .../workflowruns/{runName}/status
+  Actor -> API : GET .../workflowruns/{runName}/logs
+  Actor -> API : GET .../workflowruns/{runName}/events
+  API -> WP : read through the cluster gateway
+  WP --> API : status, logs, events
+  API --> Actor : status, logs, events
+end
+
+group F-006-US3 — define which build templates teams may use
+  Actor -> API : POST /api/v1/namespaces/{namespaceName}/workflows
+  API -> K8s : create Workflow
+  Actor -> API : GET .../workflows/{workflowName}/schema
+  API --> Actor : parameter schema
+end
+
+group failure — the build fails
+  WP --> Ctl : workflow phase Failed
+  Ctl -> K8s : WorkflowRun status Failed, logs retained for reading
+  note right of Ctl : no release is cut from a failed build
+end
+
+group failure — no workflow plane is registered
+  Ctl -> K8s : resolve the WorkflowPlane
+  K8s --> Ctl : NotFound
+  Ctl -> K8s : condition recorded; the run does not start
+end
+
+group failure — reconcile error
+  Ctl -> K8s : update status condition
+  K8s --> Ctl : stored
+  note right of Ctl : requeue with backoff; condition recorded on the resource
+end
+
+group failure — deletion while dependents exist
+  Actor -> API : DELETE the resource
+  API -> K8s : delete
+  K8s -> Ctl : deletionTimestamp set
+  Ctl -> Ctl : finalizer cleanup runs first
+  Ctl -> K8s : remove finalizer
+end
+
+note over Ctl, WP
+  invariants: DOM-001-R5 a build produces an artefact that a release then freezes
+  a Workflow is a parameterised abstraction with a /schema endpoint, like a ComponentType
+  OPEN: no build timeout, retry count or concurrency limit is configured
+  OPEN: no retention policy for WorkflowRun objects or their logs is expressed
+  OPEN: the CI plane is described as optional; what is lost without it is unstated
+end note
+@enduml

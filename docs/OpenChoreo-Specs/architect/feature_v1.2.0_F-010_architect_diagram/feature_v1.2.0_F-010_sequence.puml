@@ -1,0 +1,85 @@
+@startuml feature_v1.2.0_F-010_sequence
+' Runtime truth for F-010 v1.2.0 — AI Agents
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-010_front-matter.yaml, name for name.
+title F-010 v1.2.0 — AI Agents
+autonumber
+
+actor "Platform user" as User
+actor "SRE" as SRE
+participant "portal assistant" as Portal
+participant "sre agent" as RCA
+participant "finops agent" as FinOps
+participant "agent MCP server" as AMCP
+participant "openchoreo MCP / observer" as Platform
+participant "LLM provider" as LLM
+database "report store" as Store
+
+group F-010-US1 — ask the portal a question and get an answer grounded in platform state
+  User -> Portal : POST /api/v1alpha1/portal-assistant/chat
+  activate Portal
+  Portal -> LLM : prompt with the available tools
+  LLM --> Portal : tool call
+  Portal -> Platform : read platform state through the tool
+  Platform --> Portal : result
+  alt the result is empty and the tool is an observability query
+    Portal -> Portal : summarise what is missing and stop, rather than retrying with a new window
+  end
+  Portal -> LLM : tool result
+  LLM --> Portal : streamed answer
+  Portal --> User : streamed answer
+  deactivate Portal
+end
+
+group F-010-US2 — get a root-cause analysis without assembling the evidence
+  SRE -> RCA : POST /api/v1alpha1/rca-agent/analyze
+  activate RCA
+  RCA -> AMCP : gather logs, events and topology
+  AMCP -> Platform : query
+  alt the platform denies access
+    Platform --> AMCP : forbidden
+    AMCP --> RCA : FORBIDDEN, distinct from a generic backend failure
+    RCA -> RCA : degrade gracefully rather than retry
+  else
+    Platform --> AMCP : evidence
+  end
+  RCA -> LLM : analyse
+  LLM --> RCA : analysis
+  RCA -> Store : write the report
+  RCA --> SRE : report
+  deactivate RCA
+  SRE -> RCA : GET /api/v1/rca-agent/reports/{report_id}
+end
+
+group F-010-US3 — see cost analyses and dismiss a recommendation without it reappearing
+  User -> FinOps : POST /api/v1alpha1/analyses
+  activate FinOps
+  FinOps -> Platform : read cost data
+  FinOps -> LLM : analyse
+  FinOps -> Store : write the report
+  FinOps --> User : report
+  deactivate FinOps
+  User -> FinOps : PUT /api/v1alpha1/reports/{report_id} (dismiss)
+  alt the action was already applied
+    FinOps --> User : rejected, a dismiss must not flip an applied action
+  else
+    FinOps -> Store : record the dismissal
+  end
+end
+
+group failure — an unhandled error inside an agent
+  Portal -> Portal : exception
+  Portal --> User : a generic message; the raw exception text is never echoed back
+end
+
+note over Portal, LLM
+  invariants: a dismiss request must not flip an action that has already been applied
+  raw exception text is never returned to the caller
+  an empty observability result is summarised, not retried with a widened window
+  a forbidden response surfaces as FORBIDDEN, distinct from a backend failure
+  OPEN: no LLM timeout, token ceiling or retry policy is configured
+  OPEN: what data leaves the cluster on the model call, and whether it is redacted, is unstated
+  OPEN: the support level of these agents is unstated
+end note
+@enduml

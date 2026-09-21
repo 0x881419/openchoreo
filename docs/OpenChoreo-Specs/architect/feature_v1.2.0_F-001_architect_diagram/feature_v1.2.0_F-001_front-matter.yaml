@@ -1,0 +1,162 @@
+# feature_v1.2.0_F-001_front-matter.yaml — instant architectural context for a coding agent.
+# Pointers and names only. Every shape is defined once, in the in-repo OpenAPI specs and
+# the api/v1alpha1 type definitions; restating one here would create a second source of truth.
+# Reconstructed from shipped code: a value the repository does not configure is `none`,
+# never a plausible number, and the question is carried in `open:`.
+
+id: "F-001"
+feature: "F-001"
+version: "v1.2.0"
+kind: front-matter
+title: "Component Delivery Pipeline"
+status: ready
+owner: TBD
+updated: "2026-09-21"
+
+description: "Turns a developer's Component into running workloads by freezing it into an immutable release, binding that release per environment, and applying the rendered objects to a data plane."
+globs:
+  - "api/v1alpha1/component_types.go"
+  - "api/v1alpha1/componentrelease_types.go"
+  - "api/v1alpha1/releasebinding_types.go"
+  - "api/v1alpha1/renderedrelease_types.go"
+  - "api/v1alpha1/workload_types.go"
+  - "internal/controller/component/**"
+  - "internal/controller/componentrelease/**"
+  - "internal/controller/releasebinding/**"
+  - "internal/controller/renderedrelease/**"
+  - "internal/pipeline/component/**"
+  - "internal/openchoreo-api/services/component/**"
+  - "internal/occ/cmd/component/**"
+
+participants:
+  - name: "Developer"
+    role: actor
+    path: "external"
+  - name: "openchoreo-api"
+    role: entrypoint
+    path: "cmd/openchoreo-api/main.go"
+  - name: "component service"
+    role: service
+    path: "internal/openchoreo-api/services/component"
+  - name: "Kubernetes API (etcd)"
+    role: store
+    path: "external"
+  - name: "component controller"
+    role: service
+    path: "internal/controller/component/controller.go"
+  - name: "releasebinding controller"
+    role: service
+    path: "internal/controller/releasebinding/controller.go"
+  - name: "component render pipeline"
+    role: service
+    path: "internal/pipeline/component/pipeline.go"
+  - name: "renderedrelease controller"
+    role: service
+    path: "internal/controller/renderedrelease/controller.go"
+  - name: "data plane cluster"
+    role: external
+    path: "external"
+
+entrypoints:
+  - kind: HTTP
+    path: "cmd/openchoreo-api/main.go"
+    symbol: "main"
+  - kind: EVENT
+    path: "internal/controller/component/controller.go"
+    symbol: "Reconcile"
+  - kind: EVENT
+    path: "internal/controller/releasebinding/controller.go"
+    symbol: "Reconcile"
+  - kind: EVENT
+    path: "internal/controller/renderedrelease/controller.go"
+    symbol: "Reconcile"
+
+contracts:
+  endpoints:
+    - "DELETE /api/v1/namespaces/{namespaceName}/componentreleases/{componentReleaseName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/components/{componentName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/releasebindings/{releaseBindingName}"
+    - "DELETE /api/v1/namespaces/{namespaceName}/workloads/{workloadName}"
+    - "GET /api/v1/namespaces/{namespaceName}/componentreleases"
+    - "GET /api/v1/namespaces/{namespaceName}/componentreleases/{componentReleaseName}"
+    - "GET /api/v1/namespaces/{namespaceName}/components"
+    - "GET /api/v1/namespaces/{namespaceName}/components/{componentName}"
+    - "GET /api/v1/namespaces/{namespaceName}/components/{componentName}/schema"
+    - "GET /api/v1/namespaces/{namespaceName}/releasebindings"
+    - "GET /api/v1/namespaces/{namespaceName}/releasebindings/{releaseBindingName}"
+    - "GET /api/v1/namespaces/{namespaceName}/releasebindings/{releaseBindingName}/k8sresources/events"
+    - "GET /api/v1/namespaces/{namespaceName}/releasebindings/{releaseBindingName}/k8sresources/logs"
+    - "GET /api/v1/namespaces/{namespaceName}/releasebindings/{releaseBindingName}/k8sresources/tree"
+    - "GET /api/v1/namespaces/{namespaceName}/workloads"
+    - "GET /api/v1/namespaces/{namespaceName}/workloads/{workloadName}"
+    - "POST /api/v1/namespaces/{namespaceName}/componentreleases"
+    - "POST /api/v1/namespaces/{namespaceName}/components"
+    - "POST /api/v1/namespaces/{namespaceName}/components/{componentName}/generate-release"
+    - "POST /api/v1/namespaces/{namespaceName}/releasebindings"
+    - "POST /api/v1/namespaces/{namespaceName}/workloads"
+    - "POST /api/v1alpha1/namespaces/{namespaceName}/releasebindings/{releaseBindingName}/trigger"
+    - "PUT /api/v1/namespaces/{namespaceName}/components/{componentName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/releasebindings/{releaseBindingName}"
+    - "PUT /api/v1/namespaces/{namespaceName}/workloads/{workloadName}"
+  events: []  # no message broker or topic is used by this feature
+  entities:
+    - "Component"
+    - "ComponentRelease"
+    - "ReleaseBinding"
+    - "RenderedRelease"
+    - "Workload"
+
+depends_on:
+  internal:
+    - "internal/pipeline/component"
+    - "internal/template"
+    - "internal/clients/gateway"
+  external:
+    - "Kubernetes API server >= 1.30"
+    - "Gateway API CRDs"
+
+approach:
+  chosen: "A four-stage reduction: Component, then an immutable ComponentRelease, then a per-environment ReleaseBinding, then a RenderedRelease applied with server-side apply."
+  because: "efficiency: one render per binding, cached CEL environments. robustness: the snapshot cannot drift once cut. resilience: apply failures are recorded as conditions and requeued, leaving the running workload untouched."
+  rejected: []  # reconstructed from code; the repository retains no record of what was rejected
+  adr: ADR-0001
+
+invariants: [DOM-001-R3, DOM-001-R5]
+
+failure_modes:
+  - when: "the render pipeline returns an error"
+    expect: "record the condition on the ReleaseBinding and requeue; no RenderedRelease is written"
+  - when: "server-side apply to the data plane fails"
+    expect: "set condition ApplyFailed and requeue; the previously applied workload is left as it was"
+  - when: "a reconcile returns a non-nil error"
+    expect: "requeue with backoff and record the condition on the resource status"
+  - when: "a resource is deleted while dependents exist"
+    expect: "run the finalizer cleanup before releasing the object"
+
+resilience:
+  timeout_ms: "none"
+  retry: "controller-runtime exponential backoff on requeue"
+  idempotency: "server-side apply with FieldOwner and ForceOwnership"
+  degraded: "Existing workloads keep running; new renders queue until the data plane is reachable."
+
+observability:
+  logs: []     # logging is free-text through logr/zap; no event-name constants exist to grep for
+  metrics: []  # controller-runtime defaults only; this feature defines no metric of its own
+  traces: []   # OpenTelemetry is a dependency, but no span is named in this feature's code
+
+non_goals:
+  - "Building images from source — that is F-006."
+  - "Rendering projects or backing resources — that is F-003."
+  - "Defining the ComponentTypes and Traits it renders — that is F-002."
+
+traceability:
+  stories: [F-001-US1, F-001-US2, F-001-US3]
+  rules: [DOM-001-R3, DOM-001-R5]
+  tasks: [F-001-T1, F-001-T2, F-001-T3, F-001-T4, F-001-T5, F-001-T6]
+  tests: []  # the test plan records package-level results; no per-case TC identifiers exist
+  route: "docs/OpenChoreo-Specs/route/route_v1.2.0_F-001.md"
+
+open:
+  - "No timeout or retry budget is configured for the data-plane apply path."
+  - "Why the snapshot boundary is ComponentRelease rather than ReleaseBinding is not recorded."
+  - "The intended operator experience when a ComponentRelease is deleted but its ReleaseBinding survives is unstated."

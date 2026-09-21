@@ -1,0 +1,84 @@
+@startuml feature_v1.2.0_F-003_sequence
+' Runtime truth for F-003 v1.2.0 — Project and Resource Delivery
+' Reconstructed from shipped code. Arrows name contracts the hub documents;
+' a value not configured anywhere in the repository is written OPEN, never guessed.
+' The cast below is the participants: list of feature_v1.2.0_F-003_front-matter.yaml, name for name.
+title F-003 v1.2.0 — Project and Resource Delivery
+autonumber
+
+actor "Developer" as Actor
+participant "openchoreo-api" as API
+participant "project service" as Svc
+database "Kubernetes API (etcd)" as K8s
+participant "project controller" as PCtl
+participant "projectreleasebinding controller" as PRB
+participant "resourcereleasebinding controller" as RRB
+participant "renderedrelease controller" as RR
+participant "data plane cluster" as DP
+
+group F-003-US1 — group components into a project and get isolation and shared networking
+  Actor -> API : POST /api/v1/namespaces/{namespaceName}/projects
+  activate API
+  API -> Svc : create Project
+  Svc -> K8s : create Project
+  K8s --> Svc : created
+  Svc --> API : Project
+  API --> Actor : Project
+  deactivate API
+  K8s -> PCtl : watch event
+  PCtl -> K8s : create ProjectRelease
+  K8s -> PRB : watch ProjectReleaseBinding
+  PRB -> PRB : render project resources, including the gateway stage
+  PRB -> K8s : create RenderedRelease
+  K8s -> RR : watch RenderedRelease
+  RR -> DP : server-side apply (namespace, NetworkPolicy, gateway)
+end
+
+group F-003-US2 — declare a dependency on a backing resource and receive its connection details
+  Actor -> API : POST /api/v1/namespaces/{namespaceName}/resources
+  API -> K8s : create Resource
+  K8s -> RRB : watch ResourceReleaseBinding
+  activate RRB
+  RRB -> RRB : render from the ResourceType
+  RRB -> K8s : create RenderedRelease
+  RR -> DP : server-side apply
+  DP --> RR : applied
+  RRB -> K8s : publish ResolvedResourceOutput on the binding status
+  deactivate RRB
+  note right of RRB : the consuming workload reads the output by reference, never by value
+end
+
+group F-003-US3 — control which backing resources are offerable
+  Actor -> API : GET /api/v1/namespaces/{namespaceName}/resourcetypes
+  API --> Actor : ResourceType list
+end
+
+group failure — a resource dependency is unresolved
+  RRB -> K8s : read the target Resource
+  K8s --> RRB : NotFound or not ready
+  RRB -> K8s : record a pending resource dependency on the binding
+  note right of RRB : the component is not rendered with a half-resolved dependency
+end
+
+group failure — reconcile error
+  Ctl -> K8s : update status condition
+  K8s --> Ctl : stored
+  note right of Ctl : requeue with backoff; condition recorded on the resource
+end
+
+group failure — deletion while dependents exist
+  Actor -> API : DELETE the resource
+  API -> K8s : delete
+  K8s -> Ctl : deletionTimestamp set
+  Ctl -> Ctl : finalizer cleanup runs first
+  Ctl -> K8s : remove finalizer
+end
+
+note over PRB, RRB
+  invariants: DOM-001-R5 releases are immutable; per-environment variation lives on the binding
+  DOM-001-R1 a resolved output sets exactly one of value, secretKeyRef, configMapKeyRef
+  project isolation is enforced by generated NetworkPolicies, not by user configuration
+  OPEN: no timeout or retry is configured for dependency resolution
+  OPEN: the intended lifecycle when a Resource is deleted while dependants remain is unstated
+end note
+@enduml
